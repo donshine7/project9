@@ -1,0 +1,57 @@
+
+flowchart TB
+    H["Hiworks 메일 서버"] --> I["수집·중복 제거 Tool"]
+    I --> S["PostgreSQL source<br/>이메일 2차 원본"]
+
+    subgraph CurrentOps["현재 운영 중 · Outlook 자동분류"]
+        O["사용자 PC · Outlook (classic)<br/>POP3 다운로드 · NewMailEx"] --> VBA["Outlook (classic) 내부 VBA<br/>HiworksRulesFinal · 21단계 판정"]
+        VBA --> FOLDERS["사용자 PC · Outlook 데이터 파일<br/>기존 최상위 폴더 20개"]
+        VBA -->|불명확| INBOX["사용자 PC · Outlook 받은 편지함 유지"]
+        SNAP["사용자 PC · Codex 작업공간<br/>운영 스냅샷·변경 이력"] --> DASH["사용자 PC · 로컬 브라우저<br/>운영 대시보드"]
+        FOLDERS -. "다음 단계: 읽기 전용 집계" .-> DASH
+    end
+
+    H -->|"POP3S 995 · Outlook classic 실행 시"| O
+    VBA -. "작업마다 정책 상태 동기화" .-> SNAP
+
+    subgraph Deterministic["LLM 없는 Tool 파이프라인"]
+        N["본문 정규화"]
+        ID["사건번호·이메일 주소 매칭"]
+        DT["날짜 표현 추출"]
+        TH["Thread 연결"]
+        WF["워크플로·중복·상태 검증"]
+        CF["신뢰도 계산"]
+    end
+
+    S --> N --> ID --> DT --> TH --> WF --> CF
+
+    CF -->|충분히 명확함| C["원자적 변경 후보"]
+    CF -->|사실 판단이 모호함| FA["Fact Analyzer<br/>최대 1회 LLM 호출"]
+    FA --> C
+
+    C --> LR{"법·제도 해석 필요?"}
+    LR -->|아니오| DV["결정적 검증 Tool"]
+    LR -->|예| RA["Reference 선택·적용 Tool"]
+
+    RA --> CALC["기일·절차 계산 Tool"]
+    CALC -->|규칙으로 해결| DV
+    CALC -->|법적 해석이 모호함| LA["Legal Analyzer<br/>최대 1회 LLM 호출"]
+    LA --> DV
+
+    DV --> RISK{"위험도"}
+    RISK -->|저위험·고신뢰| COMMIT["승인 이벤트 Commit"]
+    RISK -->|고위험| HUMAN["사람 Review"]
+    RISK -->|모델 교차검증 필요| VERIFY["Verifier LLM<br/>예외적 호출"]
+    VERIFY --> HUMAN
+    HUMAN --> COMMIT
+
+    COMMIT --> CORE["PostgreSQL core"]
+    CORE --> PROJ["상태·작업·기일 투영"]
+    CORE --> OUT["Outbox"]
+
+    OUT --> TEMPLATE["Wiki Template 생성"]
+    TEMPLATE -->|서술 요약 필요| WLLM["Wiki 요약 LLM<br/>비동기·배치"]
+    TEMPLATE --> WIKI["Wiki 새 버전"]
+    WLLM --> WIKI
+
+    DASH -. "향후 운영 상태 연결" .-> PROJ

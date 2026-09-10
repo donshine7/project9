@@ -1,0 +1,15 @@
+---
+description: Keep source code and architecture diagram synchronized.
+alwaysApply: true
+---
+
+Before implementing architectural changes:
+
+1. Read docs/architecture.mmd.
+2. Identify which component is being modified.
+3. Preserve existing component boundaries unless necessary.
+4. If components, interfaces, dependencies, tools, skills,
+   agents, databases, or data flows change,
+   update docs/architecture.mmd.
+5. Use Mermaid MCP to validate and render the updated diagram.
+6. Explain what part of the architecture changed.

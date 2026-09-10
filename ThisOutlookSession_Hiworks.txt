@@ -1,0 +1,9 @@
+Private Sub Application_NewMailEx(ByVal EntryIDCollection As String)
+    Dim entryIds As Variant
+    Dim index As Long
+
+    entryIds = Split(EntryIDCollection, ",")
+    For index = LBound(entryIds) To UBound(entryIds)
+        HiworksRulesFinal.ClassifyIncomingMail CStr(entryIds(index))
+    Next index
+End Sub
