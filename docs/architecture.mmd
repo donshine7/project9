@@ -55,3 +55,13 @@ flowchart TB
     WLLM --> WIKI
 
     DASH -. "향후 운영 상태 연결" .-> PROJ
+
+    subgraph LocalHub["로컬 업무 허브 · 127.0.0.1:4173"]
+        HUB["/ · 업무 허브"] --> MAILDASH["/mail · Hiworks·Outlook (classic) 운영판"]
+        HUB --> PATENTDASH["/provisional · 한국특허 가출원 13단계"]
+        PATENTDASH --> API["localhost API · 프로젝트 목록·초기화"]
+        API --> PS["고정 New-PatentProject.ps1<br/>shell 없이 호출"]
+        PS --> ROOT["C:\\ChatGPT\\AI-Work\\10_특허\\한국특허가출원<br/>staging → 원자적 승격"]
+    end
+
+    DASH -. "정책·변경 이력 표시" .-> MAILDASH

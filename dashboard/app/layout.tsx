@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '상상특허 · Outlook (classic) 운영 대시보드',
-  description: 'Hiworks와 Outlook (classic) 메일 자동분류 정책, 실행 위치, 폴더, 운영 이력을 관리하는 로컬 대시보드',
+  title: '상상특허 · 업무 자동화 허브',
+  description: 'Hiworks·Outlook (classic) 메일 운영과 한국특허 가출원 프로젝트를 연결하는 로컬 업무 허브',
 };
 
 export default function RootLayout({

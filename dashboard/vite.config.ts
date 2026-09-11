@@ -2,6 +2,7 @@ import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
+import { localApiMiddleware } from './local-api';
 
 export default defineConfig(async () => {
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
@@ -11,8 +12,19 @@ export default defineConfig(async () => {
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
   return {
+    server: {
+      host: '127.0.0.1',
+      port: 4173,
+      strictPort: true,
+    },
     css: { postcss: { plugins: [tailwindcss()] } },
     plugins: [
+      {
+        name: 'local-project-api',
+        configureServer(server) {
+          server.middlewares.use(localApiMiddleware());
+        },
+      },
       vinext(),
       sites(),
       cloudflare({

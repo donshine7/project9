@@ -104,17 +104,17 @@ export const rules: Rule[] = [
     id: 'R11',
     priority: 11,
     category: '국내',
-    condition: '국내 P + 숫자 6자리 + “등록결정서 접수 보고”',
+    condition: '국내 P + 숫자 6자리 + “등록결정서 접수 보고”·“특허결정서 접수 보고”·“분할여부 확인요청”',
     destination: '국내특허 등록결정',
-    note: 'PT·PI 사건번호는 국내 P로 보지 않음',
+    note: '공백 무시; PT·PI 사건번호는 국내 P로 보지 않음',
   },
   {
     id: 'R12',
     priority: 12,
     category: '국내',
-    condition: '국내 P + 숫자 6자리 + 지정된 업무요청 제목 템플릿',
+    condition: '국내 P + 지정된 업무요청 제목 또는 [EASYPAT_S] + 본문 “업무구분: OA”·“의견/보정서 작성”',
     destination: '국내특허 OA/ 우선심사 보완',
-    note: '의견제출통지서 대응 또는 우선심사신청보완요구서',
+    note: '본문 템플릿 예외가 해외 판정보다 우선',
   },
   {
     id: 'R13',
@@ -162,7 +162,7 @@ export const rules: Rule[] = [
     category: '국내',
     condition: '해외 사건이 아니고 P + 숫자 6자리만 존재',
     destination: '국내 특허',
-    note: 'P/T/D 중 사건 종류가 하나로 명확해야 함',
+    note: 'P######-S#·P######-DIV# 국내 시리즈/분할출원 접미사도 국내로 우선 인식',
   },
   {
     id: 'R19',
@@ -236,6 +236,8 @@ export const overseasSignals = [
   'hjlee@sspat.net · 이효정 과장 · 해외관리팀',
   'jtjang@sspat.net · 장진태 · 전자4팀/해외관리팀 (발신 시)',
   '제목과 인용·서명을 제외한 새 본문이 모두 영문',
+  'P######-S#·P######-DIV#는 국내 특허 시리즈/분할출원 예외',
+  '[EASYPAT_S] + 업무구분 OA·의견/보정서 작성은 국내 OA 우선',
 ];
 
 export const executionMap = [
@@ -284,6 +286,18 @@ export const executionMap = [
 ];
 
 export const changeLog = [
+  {
+    date: '2026.09.10',
+    title: '국내 업무배정 메일 판정 보강',
+    detail: '[EASYPAT_S] 본문에서 업무구분 OA·의견/보정서 작성 템플릿을 확인해 국내특허 OA/ 우선심사 보완으로 우선 분류하고 기존 3건을 보정',
+    status: '완료',
+  },
+  {
+    date: '2026.09.10',
+    title: '국내 특허 시리즈·분할출원 예외 추가',
+    detail: 'P######-S# 및 P######-DIV# 식별번호를 해외 신호보다 우선해 국내 특허로 분류하고 기존 오분류 메일을 이동',
+    status: '완료',
+  },
   {
     date: '2026.09.10',
     title: '최종 Outlook 분류 정책 적용',

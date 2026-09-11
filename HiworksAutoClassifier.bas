@@ -80,6 +80,62 @@ Public Sub ReclassifySelectedHiworksMail()
 CleanExit:
 End Sub
 
+' Repairs existing series cases that were previously placed in the overseas
+' patent folder before the domestic-series rule was added.
+Public Sub ReclassifyDomesticPatentSeriesMail()
+    On Error GoTo CleanExit
+
+    Dim targetStore As Outlook.Store
+    Dim sourceFolder As Outlook.Folder
+    Dim itemObject As Object
+    Dim itemIndex As Long
+
+    Set targetStore = FindTargetStore()
+    If targetStore Is Nothing Then Exit Sub
+    Set sourceFolder = FindTopLevelFolder(targetStore.GetRootFolder, "해외 특허")
+    If sourceFolder Is Nothing Then Exit Sub
+
+    For itemIndex = sourceFolder.Items.Count To 1 Step -1
+        Set itemObject = sourceFolder.Items.Item(itemIndex)
+        If TypeOf itemObject Is Outlook.MailItem Then
+            If HasDomesticPatentSeries(NzText(itemObject.Subject)) Then
+                ClassifyMailObject itemObject, targetStore
+            End If
+        End If
+    Next itemIndex
+
+CleanExit:
+End Sub
+
+' Repairs existing EASYPAT_S OA assignment notices that were previously
+' placed in the overseas patent folder before the body-template exception.
+Public Sub ReclassifyDomesticOaAssignmentMail()
+    On Error GoTo CleanExit
+
+    Dim targetStore As Outlook.Store
+    Dim sourceFolder As Outlook.Folder
+    Dim itemObject As Object
+    Dim itemIndex As Long
+
+    Set targetStore = FindTargetStore()
+    If targetStore Is Nothing Then Exit Sub
+    Set sourceFolder = FindTopLevelFolder(targetStore.GetRootFolder, "해외 특허")
+    If sourceFolder Is Nothing Then Exit Sub
+
+    For itemIndex = sourceFolder.Items.Count To 1 Step -1
+        Set itemObject = sourceFolder.Items.Item(itemIndex)
+        If TypeOf itemObject Is Outlook.MailItem Then
+            If IsDomesticOaAssignment( _
+                NzText(itemObject.Subject), _
+                ExtractNewBody(NzText(itemObject.Body))) Then
+                ClassifyMailObject itemObject, targetStore
+            End If
+        End If
+    Next itemIndex
+
+CleanExit:
+End Sub
+
 ' Reclassifies today's messages currently in the Hiworks Inbox without
 ' opening them or relying on the Explorer selection.
 Public Sub ReclassifyTodayHiworksMail()
@@ -197,9 +253,30 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
     hasT = HasMatterCode(subjectText, "T")
     hasD = HasMatterCode(subjectText, "D")
 
+    ' A domestic patent series uses a suffix such as P262000-S1.  The
+    ' overseas-team participant or quoted foreign wording must not override
+    ' this domestic-series signal.
+    If hasP And HasDomesticPatentSeries(subjectText) Then
+        isOverseas = False
+    End If
+
+    ' EASYPAT_S assignment notices are domestic OA work items. Their P-code
+    ' and English field labels (OurRef/YourRef) must not send them through an
+    ' overseas rule; the body template is the stronger signal here.
+    If hasP And IsDomesticOaAssignment(subjectText, newBody) Then
+        GetDestinationName = "국내특허 OA/ 우선심사 보완"
+        Exit Function
+    End If
+
     ' 11. Domestic patent decision receipt. PT/PI never satisfy hasP.
+    ' These fixed templates are domestic patent decision follow-ups:
+    ' "등록결정서 접수 보고", "특허결정서 접수 보고", and
+    ' "분할여부 확인요청". Check this before the generic domestic patent
+    ' rule so these messages cannot fall through to "국내 특허".
     If Not isOverseas And hasP Then
-        If ContainsText(compactSubject, "등록결정서접수보고") Then
+        If ContainsText(compactSubject, "등록결정서접수보고") _
+            Or ContainsText(compactSubject, "특허결정서접수보고") _
+            Or ContainsText(compactSubject, "분할여부확인요청") Then
             GetDestinationName = "국내특허 등록결정"
             Exit Function
         End If
@@ -445,6 +522,32 @@ End Function
 Private Function HasMatterCode(ByVal sourceText As String, ByVal codePrefix As String) As Boolean
     HasMatterCode = RegexTest(sourceText, _
         "(^|[^A-Z0-9])" & UCase$(codePrefix) & "[0-9]{6}([^A-Z0-9]|$)")
+End Function
+
+Private Function HasDomesticPatentSeries(ByVal sourceText As String) As Boolean
+    ' Domestic patent series examples: P262000-S1, P262000-S2, P262000-S3.
+    ' Domestic division applications use the related P######-DIV1 form.
+    HasDomesticPatentSeries = _
+        RegexTest(sourceText, "(^|[^A-Z0-9])P[0-9]{6}-S[0-9]+([^A-Z0-9]|$)") _
+        Or RegexTest(sourceText, "(^|[^A-Z0-9])P[0-9]{6}-DIV[0-9]+([^A-Z0-9]|$)")
+End Function
+
+Private Function IsDomesticOaAssignment( _
+    ByVal subjectText As String, _
+    ByVal newBody As String) As Boolean
+
+    Dim compactSubject As String
+    Dim compactBody As String
+
+    compactSubject = RemoveWhitespace(subjectText)
+    compactBody = RemoveWhitespace(newBody)
+
+    If Not ContainsText(compactSubject, "[EASYPAT_S]") Then Exit Function
+
+    IsDomesticOaAssignment = _
+        ContainsText(compactBody, "업무구분:OA") _
+        Or ContainsText(compactBody, "업무내용:의견/보정서작성") _
+        Or ContainsText(compactBody, "담당자업무:의견/보정서작성")
 End Function
 
 Private Function RegexTest(ByVal sourceText As String, ByVal patternText As String) As Boolean
