@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "templates": [
+    {
+      "templateId": "matter-detail.reference-codes.v1",
+      "operation": "get-matter-detail",
+      "role": "reference-code-lookups",
+      "command": "OTHERS",
+      "statementCount": 3,
+      "fingerprint": null,
+      "enabled": false,
+      "status": "pending-offline-fingerprint"
+    },
+    {
+      "templateId": "matter-detail.main-record.v1",
+      "operation": "get-matter-detail",
+      "role": "main-matter-record",
+      "command": "SELECT",
+      "statementCount": 1,
+      "responseVerification": {
+        "mode": "statement-literal-equality",
+        "predicateColumn": "idx",
+        "responseColumn": "idx"
+      },
+      "fingerprint": "395d3846390487f222efd49cbfa2b8a42755ec6e43d68387853bdf07f027b835",
+      "boundMatterReference": "P261793",
+      "enabled": true,
+      "status": "live-response-identity-validated"
+    },
+    {
+      "templateId": "matter-detail.related-counts.v1",
+      "operation": "get-matter-detail",
+      "role": "related-counts",
+      "command": "SELECT",
+      "statementCount": 1,
+      "fingerprint": null,
+      "enabled": false,
+      "status": "pending-offline-fingerprint"
+    },
+    {
+      "templateId": "matter-detail.progress-records.v1",
+      "operation": "list-progress",
+      "role": "progress-records",
+      "command": "SELECT",
+      "statementCount": 1,
+      "responseVerification": {
+        "mode": "statement-literal-all-rows",
+        "predicateColumn": "idx_parent",
+        "responseColumn": "idx_parent"
+      },
+      "expectedResponseColumns": [
+        "serial", "sourcecode", "idx", "idx_parent", "no_rec", "d_rec", "d_noti", "rec_doc", "rec_div", "rec_ck", "rec_memo", "rec_memo1", "rec_memo2", "rec_memo3", "d_brief_due", "d_brief", "clerk_br", "clerk_br_id", "d_opinion_due", "d_opinion", "op_doc", "d_proc", "proc_memo", "n_extend", "d_extend", "d_due", "d_pre", "d_pre_rep", "pre_doc", "pre_memo", "no_pre", "judge", "clerk", "clerk_id", "part_class", "part_code", "part", "pre_div", "memo", "d_sort", "d_pat_rep", "d_direct", "direct_memo", "ck_proc", "method", "d_modify", "del_flag", "clerk_op", "clerk_op_id", "d_pre_due", "clerk_pr", "clerk_pr_id", "ck_ids", "d_edit", "sort"
+      ],
+      "fingerprint": "4b1f31613e243086f905cbaf101a6fab0bad0c104954becfb5d07719b95c912b",
+      "boundMatterReference": "P261793",
+      "enabled": true,
+      "status": "live-response-identity-validated"
+    },
+    {
+      "templateId": "matter-detail.documents.v1",
+      "operation": "list-documents",
+      "role": "document-records",
+      "command": "SELECT",
+      "statementCount": 1,
+      "responseVerification": {
+        "mode": "statement-literal-all-rows",
+        "predicateColumn": "GRP_KEY",
+        "responseColumn": "GRP_KEY"
+      },
+      "responsePredicateSetVerification": {
+        "mode": "statement-literals-all-rows",
+        "columns": ["DELETEFLG", "DOC_NUM", "DIV", "GRP_KEY"]
+      },
+      "expectedResponseColumns": [
+        "IDX", "DIV", "GRP_KEY", "DOC_NUM", "DOC_NAME", "REG_DATE", "FILE_NAME", "FILE_NAME_OLD", "FILE_NAME_UPLOAD", "FILE_SIZE", "MEMO", "DOWN_COUNT", "CK_OPEN", "MUID", "MUNAME", "DELETEFLG", "DELETEDT", "DELETE_UID", "DELETE_UNAME", "SORT", "USR_DATE", "serial", "family", "_TABLENAME", "_SEQ", "_PNUMBER", "_FILENO"
+      ],
+      "fingerprint": "e31186d026569c1063785e8b063eab6a92213025937cb757dbaf53fdc6e87454",
+      "boundMatterReference": "P261793",
+      "enabled": true,
+      "status": "live-fixed-predicate-set-validated-context-bound"
+    }
+  ]
+}

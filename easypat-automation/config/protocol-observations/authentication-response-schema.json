@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "sessionId": 32,
+  "source": "existing user-approved captured response; offline schema inspection",
+  "framing": "observed-jbori",
+  "partCount": 5,
+  "parts": [
+    {
+      "index": 0,
+      "inferredRole": "company settings",
+      "columnCount": 22,
+      "selectedColumnNames": ["idx", "company", "owner", "addr", "ck_approve"],
+      "credentialColumnNames": []
+    },
+    {
+      "index": 1,
+      "inferredRole": "user profile and account-related data",
+      "columnCount": 44,
+      "selectedColumnNames": ["idx", "code", "id", "pw", "name", "depart", "power_grade", "mobile_refresh_token"],
+      "credentialColumnNames": ["pw", "mobile_refresh_token"],
+      "credentialColumnTypes": {"pw": "binary", "mobile_refresh_token": "char"},
+      "passwordStorageOrTransformationVerified": false
+    },
+    {
+      "index": 2,
+      "inferredRole": "access rights",
+      "columnCount": 7,
+      "selectedColumnNames": ["urightcode", "uright", "_uread", "_uwrite", "_udelete", "_uprint", "_uattach"],
+      "credentialColumnNames": []
+    },
+    {"index": 3, "inferredRole": "server date", "columnCount": 1, "selectedColumnNames": ["today"], "types": ["timestamp"]},
+    {"index": 4, "inferredRole": "server time", "columnCount": 1, "selectedColumnNames": ["nowtime"], "types": ["char"]}
+  ],
+  "rowValuesParsed": false,
+  "rawPayloadPersisted": false,
+  "authenticationVerified": false,
+  "executable": false,
+  "limitations": [
+    "Roles are inferred from column names; authentication success is not established.",
+    "A pw binary column does not establish encryption, hashing or password comparison semantics.",
+    "One captured response does not establish authentication failure or refresh behavior.",
+    "Known credential-column detection is not a complete personal-data classifier."
+  ]
+}

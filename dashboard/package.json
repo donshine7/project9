@@ -10,6 +10,15 @@
     "build": "vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:client": "tsc tests/client-response.test.ts --outDir ../.client-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop && node ../.client-test/tests/client-response.test.js",
+    "test:phase1": "tsc tests/phase1.test.ts lib/work-db.ts lib/matter-number.ts --outDir ../.phase1-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop && node ../.phase1-test/tests/phase1.test.js",
+    "test:phase2": "tsc tests/phase2.test.ts lib/work-db.ts lib/matter-number.ts --outDir ../.phase2-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop && node ../.phase2-test/tests/phase2.test.js",
+    "test:phase3": "tsc tests/phase3.test.ts lib/analysis.ts --outDir ../.phase3-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop && node ../.phase3-test/tests/phase3.test.js",
+    "analysis": "tsc scripts/analysis-cli.ts --outDir ../.phase3-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop && node ../.phase3-test/scripts/analysis-cli.js",
+    "test:phase4": "tsc tests/phase4.test.ts --outDir ../.phase4-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop && node ../.phase4-test/tests/phase4.test.js",
+    "test:outlook-rules": "node tests/outlook-rules.test.cjs",
+    "test:registration": "tsc tests/registration.test.ts --outDir ../.registration-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop && node ../.registration-test/tests/registration.test.js",
     "format": "oxfmt"
   },
   "dependencies": {

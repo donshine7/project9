@@ -1,67 +1,119 @@
-
 flowchart TB
-    H["Hiworks 메일 서버"] --> I["수집·중복 제거 Tool"]
-    I --> S["PostgreSQL source<br/>이메일 2차 원본"]
+    USER["장진태<br/>Codex에 갱신 요청<br/>기본 1일 · 1주일 · 기간 지정"] --> ORCH["주 Codex 작업<br/>범위 확인 · 단계 조율 · 최종 검증"]
 
-    subgraph CurrentOps["현재 운영 중 · Outlook 자동분류"]
-        O["사용자 PC · Outlook (classic)<br/>POP3 다운로드 · NewMailEx"] --> VBA["Outlook (classic) 내부 VBA<br/>HiworksRulesFinal · 21단계 판정"]
-        VBA --> FOLDERS["사용자 PC · Outlook 데이터 파일<br/>기존 최상위 폴더 20개"]
-        VBA -->|불명확| INBOX["사용자 PC · Outlook 받은 편지함 유지"]
-        SNAP["사용자 PC · Codex 작업공간<br/>운영 스냅샷·변경 이력"] --> DASH["사용자 PC · 로컬 브라우저<br/>운영 대시보드"]
-        FOLDERS -. "다음 단계: 읽기 전용 집계" .-> DASH
+    subgraph Sources["업무 입력"]
+        OUTLOOK["Outlook classic<br/>허용 폴더"]
+        SENT["보낸 편지함<br/>전체"]
+        EXCLUDED["수집 제외<br/>대한변리사회 계열 · 결재<br/>해외 출원 자동 안내 · 과제 자동 안내"]
+        REGMAIL["사건 등록 메일"]
+        EXCEL["업무 정리 Excel"]
+        MANUAL["대시보드 · Codex<br/>사용자 확정 입력"]
+        EASYPAT["EasyPAT<br/>업무상 원본 · 현재 미연결"]
     end
 
-    H -->|"POP3S 995 · Outlook classic 실행 시"| O
-    VBA -. "작업마다 정책 상태 동기화" .-> SNAP
+    ORCH --> READER["Outlook 읽기 전용 어댑터<br/>메일 상태·위치 변경 없음"]
+    OUTLOOK --> READER
+    SENT --> READER
+    EXCLUDED -. "수집 전 차단" .-> READER
+    REGMAIL --> STAGE
+    EXCEL --> STAGE
+    MANUAL --> VALIDATE
+    EASYPAT -. "향후 연결 시 충돌 검토" .-> VALIDATE
+    READER --> STAGE["수집 Staging<br/>Message-ID · 본문 해시 중복 제거"]
 
-    subgraph Deterministic["LLM 없는 Tool 파이프라인"]
-        N["본문 정규화"]
-        ID["사건번호·이메일 주소 매칭"]
-        DT["날짜 표현 추출"]
-        TH["Thread 연결"]
-        WF["워크플로·중복·상태 검증"]
-        CF["신뢰도 계산"]
+    subgraph Tools["결정적 Tool 파이프라인 · LLM 없음"]
+        NORMALIZE["본문 정규화"] --> PARSE["관리번호 · 주소 · 날짜 파싱"]
+        PARSE --> THREAD["Thread 연결"]
+        THREAD --> RULES["출처 우선순위 · 상태전이 · 중복 검증"]
+        GROUPCHECK["그룹 후보 검증<br/>전체 번호 · 구성원 수 · 형식 검사"]
     end
 
-    S --> N --> ID --> DT --> TH --> WF --> CF
+    STAGE --> NORMALIZE
+    EXCEL --> GROUPCHECK --> DECISIONDB
+    GROUPCHECK -->|번호·구성원 불완전| REVIEW
+    RULES --> CLEAR{"규칙만으로 확정?"}
+    CLEAR -->|예| CANDIDATE["변경 이벤트 후보"]
 
-    CF -->|충분히 명확함| C["원자적 변경 후보"]
-    CF -->|사실 판단이 모호함| FA["Fact Analyzer<br/>최대 1회 LLM 호출"]
-    FA --> C
-
-    C --> LR{"법·제도 해석 필요?"}
-    LR -->|아니오| DV["결정적 검증 Tool"]
-    LR -->|예| RA["Reference 선택·적용 Tool"]
-
-    RA --> CALC["기일·절차 계산 Tool"]
-    CALC -->|규칙으로 해결| DV
-    CALC -->|법적 해석이 모호함| LA["Legal Analyzer<br/>최대 1회 LLM 호출"]
-    LA --> DV
-
-    DV --> RISK{"위험도"}
-    RISK -->|저위험·고신뢰| COMMIT["승인 이벤트 Commit"]
-    RISK -->|고위험| HUMAN["사람 Review"]
-    RISK -->|모델 교차검증 필요| VERIFY["Verifier LLM<br/>예외적 호출"]
-    VERIFY --> HUMAN
-    HUMAN --> COMMIT
-
-    COMMIT --> CORE["PostgreSQL core"]
-    CORE --> PROJ["상태·작업·기일 투영"]
-    CORE --> OUT["Outbox"]
-
-    OUT --> TEMPLATE["Wiki Template 생성"]
-    TEMPLATE -->|서술 요약 필요| WLLM["Wiki 요약 LLM<br/>비동기·배치"]
-    TEMPLATE --> WIKI["Wiki 새 버전"]
-    WLLM --> WIKI
-
-    DASH -. "향후 운영 상태 연결" .-> PROJ
-
-    subgraph LocalHub["로컬 업무 허브 · 127.0.0.1:4173"]
-        HUB["/ · 업무 허브"] --> MAILDASH["/mail · Hiworks·Outlook (classic) 운영판"]
-        HUB --> PATENTDASH["/provisional · 한국특허 가출원 13단계"]
-        PATENTDASH --> API["localhost API · 프로젝트 목록·초기화"]
-        API --> PS["고정 New-PatentProject.ps1<br/>shell 없이 호출"]
-        PS --> ROOT["C:\\ChatGPT\\AI-Work\\10_특허\\한국특허가출원<br/>staging → 원자적 승격"]
+    subgraph Agents["프로젝트 전용 Codex 에이전트 · config/agents"]
+        MAILAI["mail_intake<br/>Luna · medium<br/>메일 사실 구조화"]
+        LINKAI["matter_linker<br/>Terra · high<br/>사건·업무 연결"]
+        ACTIONAI["action_analyst<br/>Sol · high<br/>본인·팀원 Action"]
+        VERIFYAI["risk_verifier<br/>Sol · high<br/>고위험 독립 검증"]
+        WIKIAI["wiki_synthesizer<br/>Terra · medium<br/>Wiki 개정안"]
     end
 
-    DASH -. "정책·변경 이력 표시" .-> MAILDASH
+    CLEAR -->|아니오| MAILAI --> LINKAI --> CANDIDATE
+    LINKAI --> ACTIONAI --> CANDIDATE
+    CANDIDATE --> DECISIONDB
+    DECISIONDB --> RISK{"기일 · 제출 · 등록 · 비용<br/>또는 사건 충돌?"}
+    RISK -->|고위험| VERIFYAI
+    VERIFYAI --> REVIEW["사람 검토함"]
+    RISK -->|저위험| VALIDATE["주 작업의 최종 검증<br/>스키마 · 근거 · 상태전이"]
+    REVIEW --> VALIDATE
+
+    VALIDATE -->|확정| TX["단일 SQLite 트랜잭션"]
+    VALIDATE -->|불확실| REVIEW
+
+    subgraph LocalData["로컬 운영 데이터 · %LOCALAPPDATA%\\SSPAT\\work-management"]
+        EVENT["event<br/>불변 변경 원장"]
+        CORE["matter · group · organization · person<br/>work_item · assignment · action"]
+        MAILDB["mail_item · mail_matter_link<br/>EntryID 중복 방지 · 원문 근거"]
+        DAILY["mail_daily_summary<br/>날짜별 규칙 기반 1차 요약"]
+        RUNS["sync_run · decision_run<br/>모델 · 추론 강도 · 입력 스냅샷"]
+        DECISIONDB["decision_item · evidence<br/>필드별 제안값 · 신뢰도 · 근거"]
+        FEEDBACK["user_feedback · comparison<br/>사용자 최종값 · 수정 이유 · 차이"]
+        EVAL["evaluation_case · result<br/>동결 입력 · 기대값 · 회귀 결과"]
+        POLICY["policy_revision · proposal<br/>규칙 · 프롬프트 · 라우팅 버전"]
+        WIKI["wiki_revision<br/>버전별 사건 요약"]
+    end
+
+    TX --> EVENT
+    TX --> CORE
+    TX --> MAILDB
+    MAILDB --> DAILY
+    TX --> RUNS
+    TX --> FEEDBACK
+    EVENT --> WIKIAI --> WIKI
+
+    subgraph Dashboard["로컬 대시보드 · 127.0.0.1:4173"]
+        SELECTOR["PROJECT SELECTOR<br/>당소관리번호 · 그룹 · 회사 · 사람"]
+        MATTERVIEW["사건 개요<br/>업무단계 · 현재상태 · 사건 비고"]
+        PARTYVIEW["회사 · 사람 · 그룹<br/>연결 · 개별 비고"]
+        DAILYVIEW["날짜별 이메일 중요내용<br/>근거 메일 수"]
+        ACTIONVIEW["Action<br/>장진태 · 박준호 · 황현우"]
+        REVIEWVIEW["검토함 · 그룹 확인 대기<br/>Wiki · 근거 · 판단 비교"]
+        SETTINGS["모델 설정<br/>동작별 모델 · 추론 강도"]
+        IMPROVEVIEW["개선 검토<br/>반복 오류 · 회귀 평가 · 승인"]
+    end
+
+    CORE --> SELECTOR --> MATTERVIEW
+    CORE --> PARTYVIEW
+    DAILY --> DAILYVIEW
+    CORE --> ACTIONVIEW
+    WIKI --> REVIEWVIEW
+    RUNS --> REVIEWVIEW
+    FEEDBACK --> REVIEWVIEW
+    EVAL --> IMPROVEVIEW
+    SETTINGS -. "Codex 요청으로 TOML 변경" .-> ORCH
+    MATTERVIEW -->|장진태 상태 변경| API["localhost API<br/>검증 · 낙관적 잠금 · 감사 이벤트"]
+    ACTIONVIEW -->|장진태 대신 변경| API
+    API --> VALIDATE
+
+    DECISIONDB --> COMPARE["동일 입력 기준 비교<br/>새 증거 · 선호 · 실제 오류 구분"]
+    FEEDBACK --> COMPARE
+    COMPARE --> EVAL
+    EVAL --> PROPOSAL["개선안<br/>규칙 · 프롬프트 · 역할 · 모델"]
+    PROPOSAL --> APPROVAL{"장진태 승인?"}
+    APPROVAL -->|승인| POLICY
+    APPROVAL -->|보류 · 반려| IMPROVEVIEW
+    POLICY -->|회귀 통과 버전만 활성화| ORCH
+
+    subgraph Existing["기존 기능 · 유지"]
+  HIWORKS["Hiworks"] --> VBA["Outlook VBA · HiworksRulesFinal<br/>22단계 자동분류<br/>@kpaa.or.kr 도메인·회원 경조사·마감리스트 예외 포함<br/>경조사 회귀: 김성규 모친상·김남명 부친상<br/>교육 회귀: edu@kpaa.or.kr 의무연수 안내·재발송<br/>NewMailEx 호출 모듈과 수정 모듈 일치 확인<br/>CJK 범위 ChrW 보존·2026-09-16 실행본 원본 일치 확인"]
+        VBA --> OUTLOOK
+        HUB["/ 업무 허브"] --> MAILPAGE["/mail 자동분류 운영판"]
+        HUB --> MATTERPAGE["/matters 사건·업무·메모·Action CRUD<br/>1단계 구현 완료"]
+        MATTERPAGE --> API
+        HUB --> PROVISIONAL["/provisional 가출원 13단계"]
+        PROVISIONAL --> PS["고정 PowerShell<br/>dry-run · staging · 원자적 승격"]
+    end

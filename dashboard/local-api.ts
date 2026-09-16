@@ -1,8 +1,43 @@
 import { execFile } from 'node:child_process';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { stageStatus, workflowStages } from './app/workflow';
+import { MatterNumberError } from './lib/matter-number';
+import {
+  archiveAction,
+  archiveMatter,
+  archiveNote,
+  createAction,
+  createBackup,
+  createMatterGroup,
+  createMatter,
+  createNote,
+  createOrganization,
+  createPerson,
+  createWorkItem,
+  databaseStatus,
+  getMatter,
+  importOutlookMail,
+  listSyncRuns,
+  listMatters,
+  mailStagingDirectory,
+  restoreBackup,
+  updateAction,
+  updateEntityNote,
+  updateGroupType,
+  updateMatter,
+  updateNote,
+  updateOrganizationBusinessType,
+  updateWorkItem,
+  WorkDbError,
+} from './lib/work-db';
+import type { OutlookMailRecord } from './lib/work-db';
+import { analysisStatus, reviewCandidate } from './lib/analysis';
+import { recordAuditFeedback } from './lib/audit-feedback';
+import { recordGroupReviewFeedback } from './lib/group-review';
+import { addWikiEntry, reviewWiki, wikiDetail, wikiEvidence, wikiIndex } from './lib/wiki';
 
 const execFileAsync = promisify(execFile);
 const PROJECT_ROOT = path.resolve('C:\\ChatGPT\\AI-Work\\10_특허\\한국특허가출원');
@@ -163,7 +198,7 @@ function validateInput(body: any) {
     : typeof body?.ptCaseNumbers === 'string'
       ? body.ptCaseNumbers.split(/[\s,;]+/)
       : [];
-  const ptCaseNumbers = [...new Set(rawCases.map((value: unknown) => String(value).trim().toUpperCase()).filter(Boolean))];
+  const ptCaseNumbers: string[] = [...new Set<string>(rawCases.map((value: unknown) => String(value).trim().toUpperCase()).filter(Boolean))];
 
   if (!PROJECT_NAME_PATTERN.test(projectName) || projectName.includes('..')) {
     return { error: '프로젝트명은 2~80자의 한글·영문·숫자·공백·하이픈만 사용할 수 있습니다.' };
@@ -225,8 +260,11 @@ export function localApiMiddleware() {
   return async (req: any, res: any, next: any) => {
     if (process.env.NODE_ENV === 'production') return next();
     const requestUrl = new URL(req.url ?? '/', 'http://127.0.0.1');
-    const isApiRequest = requestUrl.pathname === '/api/projects' || requestUrl.pathname === '/api/projects/init';
+    const isApiRequest = requestUrl.pathname.startsWith('/api/');
     if (isApiRequest && !isLocalRequest(req)) return json(res, 403, { error: 'localhost 요청만 허용됩니다.' });
+
+    const workApiResult = await handleWorkApi(req, requestUrl);
+    if (workApiResult) return json(res, workApiResult.status, workApiResult.payload);
 
     if (req.method === 'GET' && requestUrl.pathname === '/api/projects') {
       return json(res, 200, { root: PROJECT_ROOT, projects: await listProjects() });
@@ -248,6 +286,164 @@ export function localApiMiddleware() {
 
     return next();
   };
+}
+
+async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: number; payload: unknown } | null> {
+  const pathname = requestUrl.pathname;
+  const analysisReviewRoute = pathname.match(/^\/api\/analysis\/candidates\/([^/]+)\/review$/);
+  const analysisFeedbackRoute = pathname.match(/^\/api\/analysis\/decisions\/([^/]+)\/feedback$/);
+  const wikiRoute = pathname.match(/^\/api\/wiki\/(matter|organization|person|group)\/([^/]+)(?:\/(entries))?$/);
+  const wikiReviewRoute = pathname.match(/^\/api\/wiki\/drafts\/([^/]+)\/review$/);
+  const wikiEvidenceRoute = pathname.match(/^\/api\/wiki\/evidence\/([^/]+)$/);
+  const matterRoute = pathname.match(/^\/api\/matters\/([^/]+)$/);
+  const matterChildRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(work-items|notes|actions)$/);
+  const relationRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(organizations|people|groups)$/);
+  const entityRoute = pathname.match(/^\/api\/(work-items|notes|actions)\/([^/]+)$/);
+  const entityNoteRoute = pathname.match(/^\/api\/(matters|organizations|people|groups)\/([^/]+)\/note$/);
+  const groupTypeRoute = pathname.match(/^\/api\/groups\/([^/]+)\/type$/);
+  const organizationBusinessTypeRoute = pathname.match(/^\/api\/organizations\/([^/]+)\/business-type$/);
+  const relevant = pathname === '/api/work-db/status'
+    || pathname === '/api/work-db/backup'
+    || pathname === '/api/work-db/restore'
+    || pathname === '/api/matters'
+    || pathname === '/api/mail-sync'
+    || pathname === '/api/analysis'
+    || pathname === '/api/analysis/group-feedback'
+    || Boolean(analysisReviewRoute)
+    || Boolean(analysisFeedbackRoute)
+    || pathname === '/api/wiki'
+    || Boolean(wikiRoute || wikiReviewRoute || wikiEvidenceRoute)
+    || Boolean(matterRoute || matterChildRoute || relationRoute || entityRoute || entityNoteRoute || groupTypeRoute || organizationBusinessTypeRoute);
+  if (!relevant) return null;
+
+  try {
+    if (groupTypeRoute && req.method === 'PATCH') {
+      const body = await readBody(req);
+      return { status: 200, payload: updateGroupType(decodeURIComponent(groupTypeRoute[1]), body.groupType, body.expectedVersion) };
+    }
+    if (organizationBusinessTypeRoute && req.method === 'PATCH') {
+      const body = await readBody(req);
+      return { status: 200, payload: updateOrganizationBusinessType(decodeURIComponent(organizationBusinessTypeRoute[1]), body.businessType, body.expectedVersion) };
+    }
+    if (req.method === 'GET' && pathname === '/api/wiki') return { status: 200, payload: { entities: wikiIndex(requestUrl.searchParams.get('q') || '') } };
+    if (req.method === 'GET' && wikiEvidenceRoute) return { status: 200, payload: wikiEvidence(decodeURIComponent(wikiEvidenceRoute[1])) };
+    if (req.method === 'POST' && wikiReviewRoute) {
+      const body = await readBody(req, 64 * 1024);
+      return { status: 200, payload: reviewWiki(decodeURIComponent(wikiReviewRoute[1]), body.action, body.expectedVersion) };
+    }
+    if (wikiRoute) {
+      if (req.method === 'GET' && !wikiRoute[3]) return { status: 200, payload: wikiDetail(wikiRoute[1], decodeURIComponent(wikiRoute[2])) };
+      if (req.method === 'POST' && wikiRoute[3] === 'entries') return { status: 201, payload: addWikiEntry(wikiRoute[1], decodeURIComponent(wikiRoute[2]), await readBody(req, 64 * 1024)) };
+    }
+    if (req.method === 'GET' && pathname === '/api/analysis') return { status: 200, payload: analysisStatus() };
+    if (req.method === 'POST' && pathname === '/api/analysis/group-feedback') {
+      const body = await readBody(req, 64 * 1024);
+      return { status: 200, payload: recordGroupReviewFeedback(body.runId, body.answers) };
+    }
+    if (req.method === 'POST' && analysisReviewRoute) return { status: 200, payload: reviewCandidate(decodeURIComponent(analysisReviewRoute[1]), await readBody(req, 64 * 1024)) };
+    if (req.method === 'POST' && analysisFeedbackRoute) return { status: 200, payload: recordAuditFeedback(decodeURIComponent(analysisFeedbackRoute[1]), await readBody(req, 64 * 1024)) };
+    if (req.method === 'GET' && pathname === '/api/work-db/status') return { status: 200, payload: databaseStatus() };
+    if (req.method === 'POST' && pathname === '/api/work-db/backup') return { status: 201, payload: createBackup() };
+    if (req.method === 'POST' && pathname === '/api/work-db/restore') {
+      const body = await readBody(req, 64 * 1024);
+      return { status: 200, payload: restoreBackup(body?.backupFile, body?.confirmation) };
+    }
+    if (req.method === 'GET' && pathname === '/api/matters') {
+      return { status: 200, payload: { matters: listMatters(requestUrl.searchParams.get('q') ?? '') } };
+    }
+    if (req.method === 'GET' && pathname === '/api/mail-sync') return { status: 200, payload: { runs: listSyncRuns() } };
+    if (req.method === 'POST' && pathname === '/api/mail-sync') return { status: 200, payload: await syncOutlookMail(await readBody(req, 64 * 1024)) };
+    if (req.method === 'POST' && pathname === '/api/matters') {
+      return { status: 201, payload: createMatter(await readBody(req, 64 * 1024)) };
+    }
+
+    if (matterRoute) {
+      const id = decodeURIComponent(matterRoute[1]);
+      if (req.method === 'GET') return { status: 200, payload: getMatter(id) };
+      const body = await readBody(req, 64 * 1024);
+      if (req.method === 'PATCH') return { status: 200, payload: updateMatter(id, body) };
+      if (req.method === 'DELETE') return { status: 200, payload: archiveMatter(id, body?.expectedVersion) };
+    }
+
+    if (matterChildRoute && req.method === 'POST') {
+      const id = decodeURIComponent(matterChildRoute[1]);
+      const child = matterChildRoute[2];
+      const body = await readBody(req, 64 * 1024);
+      if (child === 'work-items') return { status: 201, payload: createWorkItem(id, body) };
+      if (child === 'notes') return { status: 201, payload: createNote(id, body?.content) };
+      if (child === 'actions') return { status: 201, payload: createAction(id, body) };
+    }
+
+    if (relationRoute && req.method === 'POST') {
+      const id = decodeURIComponent(relationRoute[1]);
+      const body = await readBody(req, 64 * 1024);
+      if (relationRoute[2] === 'organizations') return { status: 201, payload: createOrganization(id, body) };
+      if (relationRoute[2] === 'people') return { status: 201, payload: createPerson(id, body) };
+      return { status: 201, payload: createMatterGroup(id, body) };
+    }
+
+    if (entityNoteRoute && req.method === 'PATCH') {
+      const entityType = ({ matters: 'matter', organizations: 'organization', people: 'person', groups: 'group' } as const)[entityNoteRoute[1] as 'matters' | 'organizations' | 'people' | 'groups'];
+      const body = await readBody(req, 64 * 1024);
+      return { status: 200, payload: updateEntityNote(entityType, decodeURIComponent(entityNoteRoute[2]), body?.note, body?.expectedVersion) };
+    }
+
+    if (entityRoute) {
+      const entity = entityRoute[1];
+      const id = decodeURIComponent(entityRoute[2]);
+      const body = await readBody(req, 64 * 1024);
+      if (req.method === 'PATCH' && entity === 'work-items') return { status: 200, payload: updateWorkItem(id, body) };
+      if (req.method === 'PATCH' && entity === 'notes') return { status: 200, payload: updateNote(id, body?.content, body?.expectedVersion) };
+      if (req.method === 'DELETE' && entity === 'notes') return { status: 200, payload: archiveNote(id, body?.expectedVersion) };
+      if (req.method === 'PATCH' && entity === 'actions') return { status: 200, payload: updateAction(id, body) };
+      if (req.method === 'DELETE' && entity === 'actions') return { status: 200, payload: archiveAction(id, body?.expectedVersion) };
+    }
+
+    return { status: 405, payload: { error: '허용되지 않은 요청 방식입니다.' } };
+  } catch (error: any) {
+    if (error?.code === 'PAYLOAD_TOO_LARGE') return { status: 413, payload: { error: error.message } };
+    if (error instanceof WorkDbError) return { status: error.status, payload: { error: error.message, code: error.code } };
+    if (error instanceof MatterNumberError) return { status: 400, payload: { error: error.message, code: 'INVALID_MATTER_NUMBER' } };
+    if (error instanceof SyntaxError) return { status: 400, payload: { error: '요청 본문이 올바른 JSON이 아닙니다.' } };
+    console.error(error);
+    return { status: 500, payload: { error: '업무 데이터 처리 중 오류가 발생했습니다.' } };
+  }
+}
+
+async function syncOutlookMail(body: any) {
+  const mode = ['day', 'week', 'range'].includes(body?.mode) ? body.mode : 'day';
+  const to = new Date();
+  let from: Date;
+  if (mode === 'range') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(body?.from || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(body?.to || ''))) throw new WorkDbError('기간은 YYYY-MM-DD 형식으로 입력하세요.', 400);
+    from = new Date(`${body.from}T00:00:00`);
+    const rangeEnd = new Date(`${body.to}T00:00:00`);
+    rangeEnd.setDate(rangeEnd.getDate() + 1);
+    to.setTime(rangeEnd.getTime());
+  } else {
+    from = new Date(to);
+    from.setDate(from.getDate() - (mode === 'week' ? 7 : 1));
+  }
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || to <= from) throw new WorkDbError('수집 기간이 올바르지 않습니다.', 400);
+  if (to.getTime() - from.getTime() > 366 * 24 * 60 * 60 * 1000) throw new WorkDbError('한 번에 수집할 수 있는 기간은 최대 366일입니다.', 400);
+
+  const stagingRoot = mailStagingDirectory();
+  await mkdir(stagingRoot, { recursive: true });
+  const outputPath = path.join(stagingRoot, `outlook-${randomUUID()}.json`);
+  const scriptPath = path.resolve(process.cwd(), 'scripts', 'Export-OutlookMail.ps1');
+  if (!(await exists(scriptPath))) throw new WorkDbError('Outlook 읽기 스크립트를 찾을 수 없습니다.', 500);
+  try {
+    await execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-From', from.toISOString(), '-To', to.toISOString(), '-OutputPath', outputPath], { cwd: process.cwd(), shell: false, windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 });
+    const extracted = JSON.parse((await readFile(outputPath, 'utf8')).replace(/^\uFEFF/, '')) as { records?: OutlookMailRecord[]; folders?: string[]; excludedFolders?: string[] };
+    const records = Array.isArray(extracted.records) ? extracted.records : [];
+    const imported = importOutlookMail(records, { from: from.toISOString(), to: to.toISOString(), folders: extracted.folders || [] });
+    return { ...imported, from: from.toISOString(), to: to.toISOString(), folders: extracted.folders || [], excludedFolders: extracted.excludedFolders || [] };
+  } catch (error: any) {
+    if (error instanceof WorkDbError) throw error;
+    throw new WorkDbError(error?.stderr || error?.message || 'Outlook 메일 수집에 실패했습니다.', 500, 'OUTLOOK_SYNC_FAILED');
+  } finally {
+    await rm(outputPath, { force: true });
+  }
 }
 
 function isLocalRequest(req: any) {

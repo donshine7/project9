@@ -1,0 +1,12 @@
+import { writeFileSync } from 'node:fs';
+import { analysisPacket, analysisStatus, prepareAnalysis } from '../lib/analysis';
+const [output, ...runIds] = process.argv.slice(2);
+if (!output || !runIds.length) throw new Error('Usage: output.json sourceRunIds...');
+const targets = analysisStatus().candidates.filter(c => runIds.includes(c.run_id));
+if (!targets.length) throw new Error('No candidates');
+const ids = new Set(targets.map(c => c.id));
+const mails = [...new Set(targets.flatMap(c => Object.values(c.payload.fields).flatMap((f: unknown) => (f as {evidence: {mailId: string}[]}).evidence.map(e => e.mailId))))];
+const run = prepareAnalysis('high_risk_verification', mails);
+const packet = analysisPacket(run.runId);
+writeFileSync(output, JSON.stringify({ ...packet, targetCandidates: packet.context.candidates.filter((c: {id: string}) => ids.has(c.id)) }, null, 2), { flag: 'wx' });
+console.log(JSON.stringify({ ...run, targetCount: targets.length, output }));

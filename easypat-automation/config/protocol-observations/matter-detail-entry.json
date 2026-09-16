@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-14",
+  "application": "boriview.3.44",
+  "operation": "open-matter-detail",
+  "matterReference": "P261793",
+  "endpoint": "https://mssql2.easypnp.co.kr:8443/servlet/Jbori",
+  "transport": {
+    "method": "POST",
+    "httpVersion": "HTTP/1.1",
+    "tlsVersionObserved": "TLS 1.2"
+  },
+  "observedHttpsPostCount": 8,
+  "observedWriteCommandCountAfterMcpInspection": 2,
+  "writeSessionIds": [172, 178],
+  "followUpEvidence": "detail-mcp-classification.json",
+  "observedCommandClasses": [
+    "multi-read",
+    "read-only-select",
+    "write-update"
+  ],
+  "notableResponses": [
+    {
+      "role": "reference-code-lookups",
+      "commandClass": "multi-read",
+      "statementCount": 3,
+      "observedResponseBytes": 871,
+      "status": 200
+    },
+    {
+      "role": "main-matter-record",
+      "commandClass": "read-only-select",
+      "observedResponseBytes": 6113,
+      "status": 200
+    },
+    {
+      "role": "related-counts",
+      "commandClass": "read-only-select",
+      "observedResponseBytes": 271,
+      "status": 200
+    },
+    {
+      "role": "automatic-status-write",
+      "commandClass": "write-update",
+      "observedResponseBytes": 13,
+      "affectedRowIndicator": 1,
+      "status": 200
+    }
+  ],
+  "rawStatementsStored": false,
+  "authenticationMetadata": "redacted",
+  "classification": "unsafe-for-read-only-navigation",
+  "automationDecision": "blocked-until-the-read-requests-can-be-isolated-from-the-write-request"
+}

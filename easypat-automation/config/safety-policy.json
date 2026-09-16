@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "mode": "read-only-discovery",
+  "authorizedEndpoint": {
+    "protocol": "https:",
+    "hostname": "mssql2.easypnp.co.kr",
+    "port": "8443",
+    "pathname": "/servlet/Jbori"
+  },
+  "authorizedAuthenticationEndpoints": [
+    {
+      "protocol": "https:",
+      "hostname": "mssql2.easypnp.co.kr",
+      "port": "8443",
+      "pathname": "/EASYPAT_S_SSPAT/ip.jsp",
+      "method": "POST",
+      "body": "empty"
+    },
+    {
+      "protocol": "https:",
+      "hostname": "mssql2.easypnp.co.kr",
+      "port": "8443",
+      "pathname": "/servlet/Jbori",
+      "method": "POST",
+      "command": "OTHERS",
+      "statementCount": 5
+    }
+  ],
+  "allowedOperations": [
+    "session-status",
+    "search-matter",
+    "get-matter-detail",
+    "list-progress",
+    "list-documents",
+    "download-document"
+  ],
+  "plannedOperationsNotYetEnabled": [],
+  "blockedObservedOperations": [
+    {
+      "operation": "open-matter-detail-via-ui",
+      "reason": "an automatic UPDATE request was observed during navigation"
+    }
+  ],
+  "directReadConstraints": {
+    "get-matter-detail": {
+      "uiNavigationReplayAllowed": false,
+      "enabledTemplateIds": ["matter-detail.main-record.v1"],
+      "boundMatterReferences": ["P261793"],
+      "exactResponseMatterMatchRequired": true
+    },
+    "list-progress": {
+      "uiNavigationReplayAllowed": false,
+      "enabledTemplateIds": ["matter-detail.progress-records.v1"],
+      "boundMatterReferences": ["P261793"],
+      "exactResponseMatterMatchRequired": true
+    },
+    "list-documents": {
+      "uiNavigationReplayAllowed": false,
+      "enabledTemplateIds": ["matter-detail.documents.v1"],
+      "boundMatterReferences": ["P261793"],
+      "exactResponseMatterMatchRequired": true
+    }
+  },
+  "genericMatterSummaryConstraints": {
+    "enabled": true,
+    "mcpExposureEnabled": false,
+    "enabledTemplateIds": [
+      "matter-search.exact-count.v1",
+      "matter-search.exact-result.v1",
+      "matter-detail.main-record.v1"
+    ],
+    "acceptedMatterReferenceFamilies": ["P", "PT", "PPT", "T"],
+    "fullSuffixIdentityRequired": true,
+    "exactSearchCountRequired": 1,
+    "exactMatterReferenceMatchRequired": true,
+    "verifiedInternalIdentityRequired": true,
+    "callerSuppliedSqlAllowed": false,
+    "automaticRetryEnabled": false
+  },
+  "genericProgressConstraints": {
+    "enabled": false,
+    "mcpExposureEnabled": false,
+    "enabledTemplateIds": [
+      "matter-search.exact-count.v1",
+      "matter-search.exact-result.v1",
+      "matter-detail.progress-records.v1"
+    ],
+    "exactSearchCountRequired": 1,
+    "exactMatterReferenceMatchRequired": true,
+    "verifiedInternalIdentityRequired": true,
+    "allProgressRowsIdentityMatchRequired": true,
+    "callerSuppliedSqlAllowed": false,
+    "automaticRetryEnabled": false
+  },
+  "genericDocumentConstraints": {
+    "enabled": false,
+    "mcpExposureEnabled": false,
+    "enabledTemplateIds": [
+      "matter-search.exact-count.v1",
+      "matter-search.exact-result.v1",
+      "matter-detail.documents.v1"
+    ],
+    "exactSearchCountRequired": 1,
+    "exactMatterReferenceMatchRequired": true,
+    "verifiedInternalIdentityRequired": true,
+    "documentGroupDerivedFromVerifiedIdentityRequired": true,
+    "allDocumentRowsPredicateSetMatchRequired": true,
+    "callerSuppliedGroupKeyAllowed": false,
+    "callerSuppliedSqlAllowed": false,
+    "automaticRetryEnabled": false
+  },
+  "genericDownloadConstraints": {
+    "enabled": false,
+    "mcpExposureEnabled": false,
+    "sourceTemplateId": "matter-detail.documents.v1",
+    "selectionInput": ["matterReference", "position", "expectedFileName"],
+    "freshVerifiedDocumentListRequired": true,
+    "sameOriginOnly": true,
+    "maximumBytes": 67108864,
+    "overwriteAllowed": false,
+    "automaticRetryEnabled": false,
+    "callerSuppliedUploadPathAllowed": false
+  },
+  "documentDownloadConstraints": {
+    "enabled": true,
+    "matterReference": "P261793",
+    "sourceTemplateId": "matter-detail.documents.v1",
+    "sameOriginOnly": true,
+    "freshVerifiedListRequired": true,
+    "maximumBytes": 67108864,
+    "allowedSelections": [
+      {
+        "position": 2,
+        "expectedFileName": "P261545외_수임내역서(수정).jpg",
+        "expectedSha256": "74fe072fb2ac8e0ac0e989370a82ef7770f00eccaffa4a9df2f43cf47817c778"
+      }
+    ]
+  },
+  "mutationOperationsEnabled": false,
+  "arbitrarySqlEnabled": false,
+  "credentialPersistenceEnabled": true,
+  "credentialStore": "windows-credential-manager",
+  "automaticAuthenticationEnabled": true,
+  "tlsVerificationRequired": true,
+  "manualAuthenticationRequired": false,
+  "maxAutomaticLoginAttempts": 1,
+  "neverLogFields": [
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "password",
+    "session",
+    "sql"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "requestSessionId": 32,
+  "responseSessionId": 32,
+  "cookieContinuityEvidence": "authentication-cookie-continuity.json",
+  "status": "captured-successful-session-exchange-observed",
+  "identityStatus": "identity-row-matched",
+  "cookieContinuity": true,
+  "rightsRowCount": 8,
+  "rightsConventionSource": "captured SQL2 CASE THEN/ELSE literals; evaluated per permission column",
+  "sensitiveValuesIncluded": false,
+  "rawRequestPersisted": false,
+  "rawResponsePersisted": false,
+  "clipboardResponseReplacedAfterInspection": true,
+  "capturedExchangeMatched": true,
+  "liveAuthenticationVerified": false,
+  "failureResponseVerified": false,
+  "refreshVerified": false,
+  "executable": false,
+  "newServerRequestsSent": 0
+}

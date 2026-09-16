@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "status": "live-matter-summary-read-validated",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.main-record.v1",
+  "allowlistedOutputFieldCount": 7,
+  "nonNullOutputFieldCount": 4,
+  "nullOutputFieldCount": 3,
+  "excludedSourceFields": ["idx", "client_tel", "memo", "manager", "clerk", "inventor"],
+  "rawRowReturnedOrStored": false,
+  "internalIdentityReturnedOrStored": false,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false,
+  "nextRequirement": "Fingerprint and bind the session 174 progress-record SELECT before any live progress read."
+}

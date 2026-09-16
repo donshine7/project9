@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "templateId": "authentication.login-batch.v1",
+  "algorithm": "sha256",
+  "fingerprint": "56064960290c236c2192708b0f959996b37ec642fe7cf3630b3f83644c97b29f",
+  "statementCount": 5,
+  "credentialFree": true,
+  "stored": true,
+  "storage": "Windows-DPAPI-CurrentUser; .local/authentication-user; Git ignored",
+  "roundTripVerified": true,
+  "enabled": false,
+  "status": "stored-dpapi-roundtrip-verified; live use gated by authentication-live-verification.json"
+}

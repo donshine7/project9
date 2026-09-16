@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-16",
+  "goal": "generalize progress, document listing, and selected-file download for exact full matter references",
+  "genericProgress": {
+    "status": "offline-candidate-ready-live-cross-matter-validation-required",
+    "productionEnabled": false,
+    "mcpExposureEnabled": false,
+    "identityChain": ["exact matter search", "server-returned matter idx", "progress idx_parent"],
+    "safeProjectionFieldCount": 13,
+    "requiredNonBaselineMatterReferences": ["PT261129", "PT261130"]
+  },
+  "genericDocuments": {
+    "status": "document-group-source-discovery-required",
+    "productionEnabled": false,
+    "mcpExposureEnabled": false,
+    "knownResponseColumnCount": 27,
+    "knownSafeProjectionFields": ["position", "documentName", "registeredAt", "fileName", "fileSizeBytes"],
+    "blocker": "The zero-network baseline check disproved direct equality between the verified matter idx and the document GRP_KEY. A server-derived intermediate document-group identity must be found before parameterization.",
+    "rejectedBinding": {
+      "sourceTemplateId": "matter-search.exact-result.v1",
+      "sourceColumn": "idx",
+      "targetTemplateId": "matter-detail.documents.v1",
+      "targetPredicateColumn": "GRP_KEY",
+      "reason": "captured baseline values did not match",
+      "serverRequestsPerformed": 0
+    },
+    "baselineFilenameContainedMatterReference": false,
+    "callerSuppliedGroupKeyAllowed": false,
+    "requiredEvidence": [
+      "inspect existing encrypted templates for a value-equality source without returning values",
+      "if absent, inspect captured read-only session 245 as the likely intermediate document-group source",
+      "derive the document group only from server responses bound to the exact full matter reference",
+      "verify the derivation on PT261129 and PT261130",
+      "verify every returned document row against the derived group and the exact 27-column schema"
+    ]
+  },
+  "genericDownload": {
+    "status": "offline-candidate-ready-depends-on-generic-document-live-validation",
+    "productionEnabled": false,
+    "mcpExposureEnabled": false,
+    "selectionInput": ["matterReference", "position", "expectedFileName"],
+    "freshVerifiedDocumentListRequired": true,
+    "sameOriginOnly": true,
+    "maximumBytes": 67108864,
+    "overwriteAllowed": false,
+    "automaticRetryEnabled": false,
+    "callerSuppliedUploadPathAllowed": false,
+    "serverMutationEnabled": false
+  }
+}

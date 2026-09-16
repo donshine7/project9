@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.main-record.v1",
+  "status": "live-main-identity-read-validated",
+  "automaticAuthenticationCompleted": true,
+  "serverRequestsSent": 3,
+  "rowCount": 1,
+  "columnCount": 205,
+  "nonEmptyFieldCount": 29,
+  "statementPredicateColumn": "idx",
+  "responseIdentityColumn": "idx",
+  "responseIdentityMatched": true,
+  "rawRowValuesReturnedOrStored": false,
+  "internalIdentityReturnedOrStored": false,
+  "sessionCookieReturnedOrStored": false,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false,
+  "promotionDecision": "enable only the exact P261793 main-record fingerprint with statement-predicate response identity verification"
+}

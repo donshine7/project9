@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "issuedSessionId": 29,
+  "requestSessionId": 32,
+  "source": "Fiddler response Headers Copy followed by request Headers Copy; local memory-only exact comparison",
+  "cookieName": "JSESSIONID",
+  "equal": true,
+  "valuesIncluded": false,
+  "cookieValuePersisted": false,
+  "cookieValueTransmittedToServer": false,
+  "clipboardValueReplacedAfterComparison": true,
+  "authenticatedSessionVerified": false,
+  "serverExpiryVerified": false,
+  "refreshVerified": false,
+  "newServerRequestsSent": 0
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-16",
+  "status": "fixed-tools-live-validated-generic-summary-diagnostic-disabled",
+  "serverName": "easypat",
+  "transport": "stdio",
+  "toolCount": 6,
+  "tools": [
+    "easypat_status",
+    "easypat_get_matter_summary",
+    "easypat_list_progress",
+    "easypat_list_documents",
+    "easypat_download_document",
+    "easypat_get_document_extraction"
+  ],
+  "inputScope": {
+    "matterSummaryReference": "full P/PT/PPT/T matter reference",
+    "fixedToolMatterReference": "P261793",
+    "downloadPosition": 2,
+    "downloadFileName": "P261545외_수임내역서(수정).jpg"
+  },
+  "arbitrarySqlInput": false,
+  "arbitraryUrlInput": false,
+  "cookieInputOrOutput": false,
+  "serverUploadPathOutput": false,
+  "rawOcrTextOutput": false,
+  "liveDocumentCount": 7,
+  "liveExtractionAmountExpressionCount": 4,
+  "liveExtractionKeywordCount": 5,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false,
+  "genericMatterSummaryEnabled": false,
+  "genericMatterSummaryCandidateReady": true,
+  "genericMatterSummaryLiveValidated": false,
+  "globalCodexRegistrationEnabled": true,
+  "currentRunningTaskRequiresRefreshForNewToolInventory": true,
+  "testsPassed": 201
+}

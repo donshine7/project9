@@ -1,0 +1,28 @@
+{
+  "purpose": "temporary-protocol-discovery",
+  "configuredAt": "2026-09-14",
+  "configurationDetected": true,
+  "configurationValid": true,
+  "outputSanitizationEnabled": true,
+  "containsCredential": false,
+  "allowedUse": [
+    "classify-existing-captured-sessions",
+    "register-read-only-template-fingerprints"
+  ],
+  "prohibitedUse": [
+    "replay-write-requests",
+    "expose-authentication-material",
+    "store-raw-sql-in-project",
+    "production-runtime-dependency"
+  ],
+  "cleanupWhen": "verified read templates are registered and the direct HTTPS adapter is operational",
+  "cleanupReady": true,
+  "operationalRuntimeDependsOnFiddler": false,
+  "lastObservedNetworkCaptureEnabled": true,
+  "cleanupStatus": "pending-user-visible-capture-disable-and-temporary-fiddler-connection-removal",
+  "cleanupActions": [
+    "revoke-fiddler-mcp-api-key",
+    "remove-fiddler-mcp-entry-from-codex-config",
+    "optionally-remove-fiddler-root-ca-after-capture-work"
+  ]
+}

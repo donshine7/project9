@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "sessionId": 29,
+  "source": "user supplied Set-Cookie header following the request to inspect session 29",
+  "sourceSessionIndependentlyVerified": true,
+  "localVerificationEvidence": "authentication-cookie-continuity.json",
+  "name": "JSESSIONID",
+  "path": "/",
+  "secure": true,
+  "httpOnly": true,
+  "domainAttributePresent": false,
+  "sameSiteAttributePresent": false,
+  "expiresAttributePresent": false,
+  "maxAgeAttributePresent": false,
+  "serverExpiryKnown": false,
+  "cookieValuePersistedToProject": false,
+  "cookieValueReused": false,
+  "authenticatedSessionVerified": false,
+  "requestResponseCookieEqualityVerified": true,
+  "executable": false
+}

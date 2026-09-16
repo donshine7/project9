@@ -1,0 +1,9 @@
+.phase1-test/
+.phase1-api-test/
+.phase2-test/
+.phase2-api-test/
+.phase3-test/
+.analysis-private/
+.phase4-test/
+.client-test/
+.registration-test/

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-14",
+  "application": "boriview.3.44",
+  "operation": "search-matter",
+  "endpoint": "https://mssql2.easypnp.co.kr:8443/servlet/Jbori",
+  "transport": {
+    "method": "POST",
+    "httpVersion": "HTTP/1.1",
+    "tlsVersionObserved": "TLS 1.2",
+    "status": 200
+  },
+  "requestSequence": [
+    {
+      "role": "count-results",
+      "formFieldNames": ["connection", "count", "command", "sql"],
+      "commandClass": "read-only-select",
+      "rawStatementStored": false,
+      "observedResponseBytes": 38,
+      "responseFields": ["recCount"]
+    },
+    {
+      "role": "fetch-result-rows",
+      "formFieldNames": ["connection", "count", "command", "sql"],
+      "commandClass": "read-only-select",
+      "rawStatementStored": false,
+      "observedResponseBytes": 358,
+      "verifiedBusinessFields": ["division", "rightType", "ourRef", "status"]
+    }
+  ],
+  "authenticationMetadata": "redacted",
+  "resultVerification": {
+    "exactOurRefMatch": true,
+    "resultCount": 1,
+    "status": "case-closed"
+  }
+}

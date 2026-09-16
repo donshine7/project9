@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "status": "live-progress-read-validated",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.progress-records.v1",
+  "sourceSessionId": 174,
+  "rowCount": 2,
+  "columnCount": 55,
+  "responseIdentityMode": "statement-literal-all-rows",
+  "responseIdentityColumn": "idx_parent",
+  "allRowsIdentityMatched": true,
+  "exactResponseSchemaMatched": true,
+  "rawRowValuesReturnedOrStored": false,
+  "internalIdentityReturnedOrStored": false,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false
+}

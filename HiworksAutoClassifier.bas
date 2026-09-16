@@ -206,8 +206,20 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         End If
     End If
 
-    ' 4-6. Korean Patent Attorneys Association.
-    If senderAddress = "kpaa@kpaa.or.kr" Then
+    ' 4. Korean Patent Attorneys Association condolence notices sometimes use
+    ' a relay sender. The confirmed subject template takes priority by itself.
+    ' Verified examples include Kim Sung-gyu's mother and Kim Nam-myeong's father.
+    If ContainsText(compactSubject, "(경조사)회원") _
+        And ContainsText(compactSubject, "변리사") Then
+        GetDestinationName = "대한변리사회 - 경조사"
+        Exit Function
+    End If
+
+    ' 4-6. Korean Patent Attorneys Association. Every sender in the confirmed
+    ' kpaa.or.kr domain follows the same three-way folder policy.
+    ' edu@kpaa.or.kr mandatory-training / fine-notification notices are education.
+    ' Deploy this condition to HiworksRulesFinal: NewMailEx does not call HiworksRules.
+    If LCase$(Right$(Trim$(senderAddress), Len("@kpaa.or.kr"))) = "@kpaa.or.kr" Then
         If ContainsText(subjectText, "경조사") Then
             GetDestinationName = "대한변리사회 - 경조사"
         ElseIf ContainsText(subjectText, "연수") Then
@@ -218,7 +230,16 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         Exit Function
     End If
 
-    ' 7. Automatic government-project notices.
+    ' 7. Deadline-list handoff notices. Dates and spacing may vary, so the
+    ' stable subject markers are evaluated after whitespace is removed.
+    If ContainsText(compactSubject, "[업무전달]") _
+        And ContainsText(compactSubject, "마감리스트") _
+        And ContainsText(compactSubject, "송부의건") Then
+        GetDestinationName = "기일관리"
+        Exit Function
+    End If
+
+    ' 8. Automatic government-project notices.
     If senderAddress = "1357@kised.or.kr" _
         Or ContainsText(subjectText, "모집 공고") _
         Or ContainsText(subjectText, "모집공고") _
@@ -228,20 +249,20 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         Exit Function
     End If
 
-    ' 8. Domestic matter registration: both phrases are mandatory. Whitespace is ignored.
+    ' 9. Domestic matter registration: both phrases are mandatory. Whitespace is ignored.
     If ContainsText(compactSubject, "[업무전달]") _
         And ContainsText(compactSubject, "사건등록완료") Then
         GetDestinationName = "사건등록"
         Exit Function
     End If
 
-    ' 9. China provisional applications take priority over general overseas rules.
+    ' 10. China provisional applications take priority over general overseas rules.
     If ContainsText(subjectText, "중국") And ContainsText(subjectText, "가출원") Then
         GetDestinationName = "중국 가출원"
         Exit Function
     End If
 
-    ' 10. PI + six digits is an incoming overseas patent matter. This rule also
+    ' 11. PI + six digits is an incoming overseas patent matter. This rule also
     ' takes priority over invoice/fee wording by explicit policy.
     If HasMatterCode(subjectText, "PI") Then
         GetDestinationName = "해외 특허"
@@ -268,7 +289,7 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         Exit Function
     End If
 
-    ' 11. Domestic patent decision receipt. PT/PI never satisfy hasP.
+    ' 12. Domestic patent decision receipt. PT/PI never satisfy hasP.
     ' These fixed templates are domestic patent decision follow-ups:
     ' "등록결정서 접수 보고", "특허결정서 접수 보고", and
     ' "분할여부 확인요청". Check this before the generic domestic patent
@@ -282,7 +303,7 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         End If
     End If
 
-    ' 12. Fixed domestic OA / accelerated-examination supplement templates.
+    ' 13. Fixed domestic OA / accelerated-examination supplement templates.
     If Not isOverseas And hasP Then
         If ContainsText(compactSubject, "[업무요청]의견제출통지서대응") _
             Or ContainsText(compactSubject, "[업무요청]우선심사신청보완요구서") Then
@@ -291,13 +312,13 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         End If
     End If
 
-    ' 13. Project mail requires both a project-team participant and a project clue.
+    ' 14. Project mail requires both a project-team participant and a project clue.
     If Not isOverseas And IsProjectRelated(mail, subjectText, newBody) Then
         GetDestinationName = "과제 관련"
         Exit Function
     End If
 
-    ' 14-17. Overseas matters. Finance takes priority except for PI matters above.
+    ' 15-18. Overseas matters. Finance takes priority except for PI matters above.
     If isOverseas Then
         If IsOverseasFinance(subjectText, newBody) Then
             GetDestinationName = "해외 견적/청구/정산"
@@ -320,7 +341,7 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         End If
     End If
 
-    ' 18-20. A domestic matter must contain exactly one P/T/D matter type.
+    ' 19-21. A domestic matter must contain exactly one P/T/D matter type.
     If hasP Then domesticTypeCount = domesticTypeCount + 1
     If hasT Then domesticTypeCount = domesticTypeCount + 1
     If hasD Then domesticTypeCount = domesticTypeCount + 1
@@ -336,7 +357,7 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
         Exit Function
     End If
 
-    ' 21. A confirmed overseas matter that could not be typed more specifically.
+    ' 22. A confirmed overseas matter that could not be typed more specifically.
     If isOverseas Then
         GetDestinationName = "해외 기타"
         Exit Function
@@ -573,7 +594,8 @@ Private Function IsEnglishText(ByVal sourceText As String, ByVal minimumLetters 
     If Len(sourceText) = 0 Then Exit Function
 
     ' Any Korean or CJK ideograph means the text is not English-only.
-    If RegexTest(sourceText, "[가-힣ㄱ-ㅎㅏ-ㅣ一-龥]") Then Exit Function
+    ' ChrW keeps the CJK endpoint intact when the editor saves as Korean ANSI.
+    If RegexTest(sourceText, "[가-힣ㄱ-ㅎㅏ-ㅣ" & ChrW(&H4E00) & "-" & ChrW(&H9FA5) & "]") Then Exit Function
 
     Set expression = CreateObject("VBScript.RegExp")
     expression.Global = True

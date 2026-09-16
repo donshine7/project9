@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-09-15",
+  "matterReference": "P261793",
+  "source": "existing capture; local clipboard body inspection",
+  "searchSessionId": 119,
+  "searchRowCount": 1,
+  "exactReferenceMatched": true,
+  "searchKeyField": "idx",
+  "detailLinks": [
+    {
+      "sessionId": 168,
+      "captureFingerprintMatched": true,
+      "predicatesInspected": 8,
+      "matchingColumns": [
+        {
+          "column": "idx",
+          "occurrences": 1
+        }
+      ]
+    },
+    {
+      "sessionId": 170,
+      "captureFingerprintMatched": true,
+      "predicatesInspected": 36,
+      "matchingColumns": [
+        {
+          "column": "idx_parent",
+          "occurrences": 11
+        },
+        {
+          "column": "GRP_KEY",
+          "occurrences": 1
+        },
+        {
+          "column": "idx_data",
+          "occurrences": 1
+        }
+      ]
+    }
+  ],
+  "scope": "single-captured-matter-value-equality",
+  "actualLinkageVerified": true,
+  "primaryKeySemanticsVerified": false,
+  "parameterBindingVerified": false,
+  "executable": false,
+  "rawStatementsStored": false,
+  "internalValuesStored": false,
+  "newServerRequestsSent": 0
+}

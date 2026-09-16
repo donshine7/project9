@@ -32,11 +32,11 @@ try {
   }
 
   New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
-  $excludedDirs = @('node_modules', 'dist', '.vinext', '.wrangler', '.git') | ForEach-Object {
+  $excludedDirs = @('node_modules', 'dist', '.next', '.vinext', '.wrangler', '.git', '.link-review', '.relation-agent', '.analysis-private') | ForEach-Object {
     Join-Path $sourceDir $_
   }
 
-  Write-Host "OneDrive 원본을 실행 전용 경로에 동기화합니다: $runtimeDir"
+  Write-Host "프로젝트 원본을 실행 전용 경로에 동기화합니다: $runtimeDir"
   $robocopyArgs = @(
     $sourceDir,
     $runtimeDir,
@@ -92,6 +92,7 @@ try {
   Write-Host 'Vinext 개발 서버 로그는 이 창에 표시됩니다.'
   Push-Location -LiteralPath $runtimeDir
   try {
+    $env:SSPAT_PROJECT_ROOT = Split-Path -Parent $sourceDir
     & $npmPath run dev
     $devCode = $LASTEXITCODE
   }

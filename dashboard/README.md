@@ -1,6 +1,6 @@
 # 상상특허 로컬 운영 대시보드
 
-`대시보드 실행.cmd`를 파일 탐색기에서 더블클릭하면 PowerShell 시작 스크립트가 실행됩니다. CMD에서는 npm을 직접 찾거나 호출하지 않습니다. PowerShell이 `Get-Command npm`으로 실제 `npm.ps1` 경로를 찾고, 현재 프로젝트의 소스 원본을 `%LOCALAPPDATA%\SSPAT\dashboard-runtime`으로 동기화한 뒤 그 위치에서 설치·실행합니다. `node_modules`, `dist`, `.vinext`, `.wrangler`, `.git`은 동기화하지 않으며, 실행 전용 경로에서 최초 1회 `npm install --legacy-peer-deps --no-audit --no-fund`를 실행합니다. 별도 브라우저 대기 스크립트가 `http://127.0.0.1:4173/` 응답을 최대 60초 기다린 뒤 브라우저를 열고, Vinext 로그는 현재 명령 창에 표시됩니다.
+`대시보드 실행.cmd`를 파일 탐색기에서 더블클릭하면 PowerShell 시작 스크립트가 실행됩니다. CMD에서는 npm을 직접 찾거나 호출하지 않습니다. PowerShell이 `Get-Command npm`으로 실제 `npm.ps1` 경로를 찾고, 현재 프로젝트의 소스 원본을 `%LOCALAPPDATA%\SSPAT\dashboard-runtime`으로 동기화한 뒤 그 위치에서 설치·실행합니다. `node_modules`, `dist`, `.next`, `.vinext`, `.wrangler`, `.git`과 검증용 비공개 작업 폴더는 동기화하지 않으며, 실행 전용 경로에서 최초 1회 `npm install --legacy-peer-deps --no-audit --no-fund`를 실행합니다. 별도 브라우저 대기 스크립트가 `http://127.0.0.1:4173/` 응답을 최대 60초 기다린 뒤 브라우저를 열고, Vinext 로그는 현재 명령 창에 표시됩니다.
 
 ## 운영 갱신 원칙
 
@@ -11,8 +11,38 @@
 3. `/` 업무 허브와 `/provisional` 진행 상태·초기화 흐름
 4. 상위 `docs/architecture.mmd`의 전체 구조
 
-`index.html`과 `dashboard-data.js`는 의존성 없이 열어보는 정적 참고본으로 함께 보존합니다.
+`static-reference/`에는 의존성 없이 파일 탐색기에서 열어볼 수 있는 정적 참고본(`index.html`, `dashboard-data.js`, `dashboard.js`)을 따로 보존합니다. 실제 운영 소스는 `app/`입니다.
 
-대시보드는 로컬 Vinext 개발 서버에서 동작합니다. `/`는 업무 허브, `/mail`은 Hiworks·Outlook (classic) 운영판, `/provisional`은 한국특허 가출원 프로젝트 추적판입니다. Outlook 메일을 직접 읽거나 외부로 전송하지 않으며, 프로젝트 목록 API도 고정된 로컬 루트만 읽습니다.
+대시보드는 로컬 Vinext 개발 서버에서 동작합니다. `/`는 업무 허브, `/mail`은 Hiworks·Outlook (classic) 운영판, `/matters`는 당소관리번호 중심 업무관리 화면, `/provisional`은 한국특허 가출원 프로젝트 추적판입니다. Outlook 메일은 `/matters`에서 사용자가 갱신을 눌렀을 때만 읽기 전용으로 수집하며 외부로 전송하지 않습니다. 프로젝트 목록 API도 고정된 로컬 루트만 읽습니다.
+
+## 당소관리번호 업무관리
+
+`/matters`에서 사건과 첫 업무를 등록하고, 업무단계·현재상태·비용·자금 출처·기산일·착수일을 수정할 수 있습니다. 장진태 님 본인과 박준호·황현우 팀원의 Action, 사용자 메모도 같은 화면에서 관리합니다. 모든 직접 입력은 확정값(`confidence=1`)으로 기록되며 변경 이벤트와 행 버전을 남깁니다.
+
+사건·회사·자연인·그룹에는 각각 별도의 비고가 있습니다. 회사는 개인사업자·법인·미정으로 구분합니다. 회사·자연인·그룹은 선택한 사건에 연결해 등록하고 각 비고를 독립적으로 수정합니다.
+
+`이메일 중요내용 갱신`에서 최근 1일·1주일·지정 기간을 선택할 수 있습니다. `jtjang@sspat.net` Outlook 저장소의 허용된 메일 폴더와 보낸편지함을 읽되, 대한변리사회·결재·해외 출원 자동 안내·과제 자동 안내 계열 폴더는 폴더 진입 전에 제외합니다. 메일은 이동·삭제하거나 읽음 상태를 변경하지 않습니다. 명시적 당소관리번호가 있는 메일만 사건에 연결하고 날짜별 규칙 기반 1차 요약과 근거 메일 수를 표시합니다. LLM 정제는 다음 분석 단계에서 별도 실행 기록과 함께 추가합니다.
+
+운영 SQLite 파일은 기본적으로 `%LOCALAPPDATA%\SSPAT\work-management\sspat-work.db`에 저장됩니다. `SSPAT_WORK_DB_PATH` 환경 변수를 지정하면 검증용 DB를 분리할 수 있습니다. 화면의 `DB 백업`은 DB 옆 `backups` 폴더에 일관된 스냅샷을 만들며, 복구 API는 이 폴더 안의 백업만 허용합니다.
+
+데이터 기반 검증은 `npm run test:phase1`, 메일 수집·중복 방지·날짜별 요약 검증은 `npm run test:phase2`로 실행합니다.
 
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.
+# 3단계 분석·검토
+
+`/analysis`는 사실·Action 후보와 모델 실행 이력을 표시한다. 이 프로젝트에서 Codex에 분석을 요청하면 `npm run analysis` CLI와 전문 에이전트로 실행한다. 별도 API 키는 필요 없다. 웹의 이메일 읽기 버튼만으로 LLM이 실행되지는 않는다.
+
+분석 결과는 후보이며 사용자가 수락해야 업무 Action/확정 관찰로 저장된다. 고위험 후보는 Sol/high 독립 검증을 통과해야 수락할 수 있다. DB 변경과 사용자 피드백은 함께 기록된다. 원문 인용·라우팅·재수입 멱등성·고위험 차단·확정값 보호 테스트: `npm run test:phase3`.
+
+전체 Wiki 설계와 실행 명령은 `../docs/LLM_WIKI_DESIGN.md`에 있다. 대상별 Wiki 게시·버전 화면은 4단계 시작 지시 후 진행한다.
+
+## 검토함 및 안정화 검증
+
+`/analysis`는 정보 확인·변경 제안·처리 이력으로 나뉘며 검색·필터·20개 단위 목록과 선택 항목 상세를 제공한다. 구현과 검증 기록은 `../docs/REVIEW_INBOX_DESIGN.md`를 따른다.
+
+- 전체 타입 검사: `npm run typecheck`
+- HTTP 오류·JSON 응답 형태 검사: `npm run test:client`
+- 그룹 피드백 이력·중복 방지·원자적 취소: `npm run test:phase2`
+- 감사 답변 최신값·승계·사용자 확정값 보호: `npm run test:phase3`
+
+위 검증은 기존 lint·phase1~4·build를 대체하지 않는다. DB 테스트는 운영 DB와 분리된 임시 DB에서 실행한다.

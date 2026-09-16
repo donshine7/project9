@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "status": "live-document-list-fixed-group-validated",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.documents.v1",
+  "sourceSessionId": 247,
+  "rowCount": 7,
+  "columnCount": 27,
+  "exactResponseSchemaMatched": true,
+  "fixedPredicateColumnsMatchedForEveryRow": ["DELETEFLG", "DOC_NUM", "DIV", "GRP_KEY"],
+  "uploadPathShapeMatchedForEveryRow": true,
+  "supportedFileTypesOnly": true,
+  "invalidFileSizeCount": 0,
+  "overSizeLimitCount": 0,
+  "filenameMatterReferenceCount": 0,
+  "matterBindingMode": "user-confirmed P261793 UI context plus fixed opaque document group",
+  "rawRowsReturnedOrStored": false,
+  "uploadPathsReturnedOrStored": false,
+  "internalIdentitiesReturnedOrStored": false,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false
+}

@@ -1,0 +1,2 @@
+import {fileURLToPath} from "node:url";import{windowsProtection}from"./security/windows-secrets.mjs";import{createAuthenticationHandoffKey}from"./security/authentication-template-handoff.mjs";
+try{console.log(JSON.stringify(await createAuthenticationHandoffKey({root:fileURLToPath(new URL("../.local/read-template-handoff/",import.meta.url)),protection:windowsProtection})));}catch{console.error("READ_TEMPLATE_HANDOFF_KEY_CREATION_FAILED");process.exitCode=1;}

@@ -1,0 +1,22 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createEasyPatRuntime } from "../src/runtime.mjs";
+test("default runtime exposes verified auth and three identity-validated live-ready templates",async()=>{
+  const runtime=createEasyPatRuntime();
+  assert.equal(runtime.status().liveReady,true);
+  assert.equal(runtime.status().enabledTemplateCount,3);
+  assert.equal(runtime.status().genericMatterSummaryEnabled,false);
+  assert.equal(runtime.status().genericMatterSummaryCandidateReady,true);
+  assert.equal(runtime.status().genericMatterSummaryTemplateCount,3);
+  assert.ok(runtime.status().allowedOperations.includes("list-progress"));
+  assert.ok(runtime.status().allowedOperations.includes("list-documents"));
+  assert.ok(runtime.status().allowedOperations.includes("download-document"));
+  assert.equal(runtime.status().session.protocolVerified,true);
+  assert.equal(runtime.status().automaticAuthenticationReady,true);
+  assert.equal(runtime.status().sessionRefreshEnabled,false);
+  assert.equal(runtime.status().session.attempted,false);
+  await assert.rejects(runtime.getMatterSummary({matterReference:"PT261130"}),/GENERIC_MCP_DISABLED/);
+  await assert.rejects(runtime.read({templateId:"matter-detail.main-record.v1",matterReference:"P261793-S1"}),/CAPTURE_MATTER_MISMATCH/);
+  await assert.rejects(runtime.read({templateId:"matter-detail.related-counts.v1",matterReference:"P261793"}),/TEMPLATE_NOT_ENABLED/);
+  assert.equal(runtime.status().session.attempted,false);
+});

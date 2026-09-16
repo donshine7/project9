@@ -1,0 +1,41 @@
+schema_version = 1
+
+[defaults]
+model = "gpt-5.6-terra"
+reasoning_effort = "medium"
+fallback = "main_thread"
+
+[operations.mail_fact_extraction]
+agent = "mail_intake"
+config_file = "config/agents/mail-intake.toml"
+model = "gpt-5.6-terra"
+reasoning_effort = "high"
+risk = "low"
+
+[operations.matter_linking]
+agent = "matter_linker"
+config_file = "config/agents/matter-linker.toml"
+model = "gpt-5.6-terra"
+reasoning_effort = "high"
+risk = "medium"
+
+[operations.action_judgement]
+agent = "action_analyst"
+config_file = "config/agents/action-analyst.toml"
+model = "gpt-5.6-sol"
+reasoning_effort = "high"
+risk = "high"
+
+[operations.high_risk_verification]
+agent = "risk_verifier"
+config_file = "config/agents/risk-verifier.toml"
+model = "gpt-5.6-sol"
+reasoning_effort = "high"
+risk = "critical"
+
+[operations.wiki_revision]
+agent = "wiki_synthesizer"
+config_file = "config/agents/wiki-synthesizer.toml"
+model = "gpt-5.6-terra"
+reasoning_effort = "medium"
+risk = "medium"

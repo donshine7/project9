@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "status": "local-image-ocr-validated",
+  "matterContext": "P261793",
+  "sourceFileName": "P261545외_수임내역서(수정).jpg",
+  "sourceBinding": "validated-p261793-shared-document-group-position-2",
+  "preprocessing": "4x-lanczos-grayscale-contrast-unsharp",
+  "ocrEngine": "windows-media-ocr",
+  "ocrLanguage": "ko-KR",
+  "lineCount": 12,
+  "explicitMatterReferenceCount": 0,
+  "amountExpressionCount": 4,
+  "detectedAmountExpressions": ["600+60", "550-220", "550-110", "100+10"],
+  "detectedKeywords": ["특허", "변리사", "직무", "성과", "연구전담부서"],
+  "maskedTokenCount": 1,
+  "rawOcrTextStoredOnlyUnderLocalIgnoredDirectory": true,
+  "rawOcrTextReturnedToConsole": false,
+  "externalUploadPerformed": false
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.main-record.v1",
+  "status": "failed-closed-parser-compatibility",
+  "failureStage": "read-response",
+  "failureCode": "RESULTSET_REJECTED",
+  "automaticAuthenticationCompleted": true,
+  "serverRequestsSent": 3,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false,
+  "rawRowValuesReturnedOrStored": false,
+  "offlineDiagnosis": {
+    "observedKoreanColumnNameCount": 5,
+    "observedAdditionalType": "timestamp",
+    "credentialStyleColumnCount": 0,
+    "parserUpdatedForObservedSchema": true
+  },
+  "productionTemplateEnabled": false,
+  "nextRequirement": "Run a separately gated validation after the parser compatibility fix; do not reuse the v2 attempt gate."
+}

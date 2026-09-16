@@ -20,6 +20,14 @@
 
 모듈 이름은 `HiworksRulesFinal`이어야 하며, 대상 Outlook 저장소 표시 이름은 `jtjang@sspat.net`입니다.
 
+### 업데이트 시 주의: 실제 실행 모듈 확인
+
+- `ThisOutlookSession.Application_NewMailEx`는 `HiworksRulesFinal.ClassifyIncomingMail`을 호출합니다. 비슷한 이름의 `HiworksRules`만 수정하면 새 메일 규칙에 반영되지 않습니다.
+- 기존 `HiworksRulesFinal`을 먼저 내보내 백업하고 그 모듈을 수정합니다. 파일을 중복 가져와 다른 이름의 모듈이 생기지 않았는지 확인합니다.
+- 저장소의 `.bas`는 UTF-8입니다. 가져오기 후 한글 조건과 폴더명이 깨지지 않았는지 확인하고 컴파일·저장합니다.
+- 대한변리사회 조건은 특정 주소와의 동등 비교가 아니라 `@kpaa.or.kr` 도메인 끝 일치여야 합니다. `edu@kpaa.or.kr` + `의무연수` 제목은 `대한변리사회 - 교육`입니다.
+- 프로젝트 원본 테스트 통과와 Outlook 설치 완료는 별개입니다. 실제 호출 모듈의 조건을 확인한 뒤 설치 완료로 기록합니다. 기존 메일 재분류는 별도 요청이 있을 때만 실행합니다.
+
 ## 3. 필요한 Outlook 최상위 폴더
 
 다음 폴더는 Hiworks Outlook 저장소의 최상위에 있어야 합니다. 코드가 폴더를 임의로 만들지는 않으며, 없는 폴더로 분류되는 메일은 받은 편지함에 남습니다.

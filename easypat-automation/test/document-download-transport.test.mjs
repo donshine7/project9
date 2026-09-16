@@ -1,0 +1,10 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { createDocumentDownloadTransport } from "../src/protocol/document-download-transport.mjs";
+
+function mockResponse({status=200,type="image/jpeg",body=Buffer.from("image"),headers={},hang=false}={}){const calls=[];const request=(url,options,onResponse)=>{const req=new EventEmitter();req.destroy=()=>{};req.end=()=>{calls.push({url,options});if(hang)return;queueMicrotask(()=>{const res=new EventEmitter();res.statusCode=status;res.headers={"content-type":type,"content-length":String(body.length),...headers};res.complete=true;res.destroy=()=>{};onResponse(res);res.emit("data",body);res.emit("end");});};return req;};return{request,calls};}
+const input={uploadPath:"upload/app_proc/2026/05/21/20260521_12345678.jpg",cookie:"JSESSIONID=test-only",expectedBytes:5,extension:"jpg"};
+
+test("downloads only a fixed same-origin upload path with TLS and exact length",async()=>{const mock=mockResponse(),result=await createDocumentDownloadTransport(mock)(input);assert.equal(result.size,5);assert.equal(mock.calls.length,1);assert.equal(mock.calls[0].options.method,"GET");assert.equal(mock.calls[0].options.rejectUnauthorized,true);result.bytes.fill(0);});
+test("rejects traversal, redirects, wrong types, lengths, cookie injection, and timeouts without retry",async()=>{for(const [override,mock,code] of [[{uploadPath:"upload/app_proc/2026/05/21/../secret.jpg"},mockResponse(),"INVALID_DOWNLOAD_REQUEST"],[{},mockResponse({status:302}),"DOWNLOAD_UNEXPECTED_STATUS"],[{},mockResponse({type:"text/html"}),"DOWNLOAD_UNEXPECTED_TYPE"],[{},mockResponse({headers:{"content-length":"6"}}),"DOWNLOAD_LENGTH_MISMATCH"],[{cookie:"bad\r\nX: injected"},mockResponse(),"INVALID_DOWNLOAD_REQUEST"],[{},mockResponse({hang:true}),"DOWNLOAD_TIMEOUT"]]){const transport=createDocumentDownloadTransport({...mock,timeoutMs:10});await assert.rejects(transport({...input,...override}),error=>error.code===code);assert.ok(mock.calls.length<=1);}});

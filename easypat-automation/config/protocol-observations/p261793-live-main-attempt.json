@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.main-record.v1",
+  "status": "failed-closed-template-disabled",
+  "automaticRetryPerformed": false,
+  "liveAttemptStage": "not observable from the original sanitized CLI result",
+  "liveAttemptRequestCount": "unknown; Fiddler capture was disabled",
+  "responseDataPersisted": false,
+  "mutationEnabled": false,
+  "offlineCaptureChecked": {
+    "sessionId": 168,
+    "httpStatus": 200,
+    "contentType": "text/resultset;charset=UTF-8",
+    "recordCount": 5,
+    "dataRowCount": 1,
+    "columnCount": 205,
+    "maskedValueCount": 181,
+    "columnNamesMasked": false,
+    "ourrefColumnPresent": true,
+    "ourrefValueMasked": false,
+    "ourrefExactMatterMatch": false,
+    "targetPresentInUnmaskedCells": false,
+    "targetMayExistInMaskedCells": true,
+    "searchAndMainIdxValuesMaskedByMcp": true,
+    "idxValuesComparableThroughMcp": false,
+    "rawRowValuesReturnedOrStored": false
+  },
+  "conclusion": "Session 168 cannot satisfy the current ourref=P261793 response verifier. This does not disprove the separately observed search-idx to statement-predicate linkage, but it is insufficient for live execution, so the production fingerprint was removed and the template was disabled.",
+  "nextRequirement": "Validate a fail-closed response identity check that compares the fixed statement idx predicate with the returned main-row idx and anchors that predicate to the previously verified P261793 search result before another live read is approved."
+}

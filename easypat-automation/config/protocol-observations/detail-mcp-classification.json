@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "source": "Fiddler MCP LiveTraffic, existing capture",
+  "captureDate": "2026-09-14",
+  "endpoint": "https://mssql2.easypnp.co.kr:8443/servlet/Jbori",
+  "newRequestsSent": 0,
+  "classificationBasis": "parsed requestBody form command field",
+  "readCommandCount": 6,
+  "writeCommandCount": 2,
+  "sessions": [
+    {
+      "sessionId": 166,
+      "command": "OTHERS",
+      "statementCount": 3,
+      "templateId": "matter-detail.reference-codes.v1",
+      "classification": "read-only-candidate",
+      "candidateFingerprint": "c83f4c5a0564d73982175df7511486e6ff65e1c756013b2b57119c4330744b9f",
+      "scope": "exact-captured-request-only",
+      "executable": false
+    },
+    { "sessionId": 168, "command": "SELECT", "statementCount": 1, "classification": "body-sanitized-unverified", "executable": false },
+    { "sessionId": 170, "command": "SELECT", "statementCount": 1, "classification": "body-sanitized-unverified", "executable": false },
+    { "sessionId": 172, "command": "UPDATE", "statementCount": 1, "classification": "write-excluded", "bodySanitized": true, "executable": false },
+    { "sessionId": 174, "command": "SELECT", "statementCount": 1, "classification": "body-sanitized-unverified", "executable": false },
+    { "sessionId": 176, "command": "SELECT", "statementCount": 1, "classification": "body-sanitized-unverified", "executable": false },
+    { "sessionId": 178, "command": "UPDATE", "statementCount": 1, "classification": "write-excluded", "bodySanitized": true, "executable": false },
+    { "sessionId": 180, "command": "SELECT", "statementCount": 1, "classification": "body-sanitized-unverified", "executable": false }
+  ],
+  "rawStatementsStored": false,
+  "credentialsStored": false,
+  "productionRegistryChanged": false,
+  "nextRequirement": "Fingerprint original read requests in a trusted local process before sanitization; do not reconstruct masked values or disable output sanitization."
+}

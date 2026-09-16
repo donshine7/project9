@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "status": "live-authentication-validated",
+  "executionContext": "interactive Windows user",
+  "requestCount": 2,
+  "requests": [
+    {"method": "POST", "path": "/EASYPAT_S_SSPAT/ip.jsp", "body": "empty"},
+    {"method": "POST", "path": "/servlet/Jbori", "command": "OTHERS", "statementCount": 5}
+  ],
+  "identityStatus": "identity-row-matched",
+  "rightsRowCount": 8,
+  "sessionCookieReceived": true,
+  "sessionCookiePersisted": false,
+  "sessionCookieReturned": false,
+  "credentialReadByLocalAdapter": true,
+  "credentialValueLogged": false,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false,
+  "businessQueryPerformed": false,
+  "failureResponseVerified": false,
+  "refreshVerified": false,
+  "promotionScope": "initial authentication success path only; one attempt per runtime lifecycle; fail closed; no refresh"
+}

@@ -150,12 +150,12 @@ export default function Home() {
             </article>
             <article className="metric-card">
               <span>우선순위 판정</span>
-              <strong>21<span>단계</span></strong>
+              <strong>22<span>단계</span></strong>
               <p>위에서 먼저 일치한 규칙 하나만 적용</p>
             </article>
             <article className="metric-card">
               <span>분류 대상 폴더</span>
-              <strong>20<span>개</span></strong>
+              <strong>21<span>개</span></strong>
               <p>기존 최상위 폴더만 사용</p>
             </article>
             <article className="metric-card">
@@ -184,7 +184,7 @@ export default function Home() {
                 </div>
                 <ArrowRight className="flow-arrow" size={18} />
                 <div className="flow-step">
-                  <span className="flow-order">03</span><FileCode2 size={18} /><span className="location-tag embedded">Outlook 내부</span><strong>VBA 분류 판단</strong><small>HiworksRulesFinal · 21단계</small>
+                  <span className="flow-order">03</span><FileCode2 size={18} /><span className="location-tag embedded">Outlook 내부</span><strong>VBA 분류 판단</strong><small>HiworksRulesFinal · 22단계</small>
                 </div>
                 <ArrowRight className="flow-arrow" size={18} />
                 <div className="flow-step success-step">

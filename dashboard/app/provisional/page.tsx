@@ -3,6 +3,7 @@
 import { ArrowLeft, Check, CircleAlert, FolderKanban, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { stageStatus, type WorkflowStatus, workflowStages } from '../workflow';
+import { readApiObject } from '../../lib/api-response';
 
 type Stage = (typeof workflowStages)[number] & { status: WorkflowStatus };
 
@@ -39,8 +40,9 @@ export default function ProvisionalPage() {
     setLoading(true);
     try {
       const response = await fetch('/api/projects', { cache: 'no-store' });
-      const payload = await response.json();
-      const nextProjects = Array.isArray(payload.projects) ? payload.projects : [];
+      const payload = await readApiObject(response);
+      if (!Array.isArray(payload.projects)) throw new Error('프로젝트 목록 응답 형식이 올바르지 않습니다.');
+      const nextProjects = payload.projects as Project[];
       setProjects(nextProjects);
       const queryProject = new URLSearchParams(window.location.search).get('project');
       const nextSelected = preferredId ?? queryProject ?? selectedId;
@@ -83,9 +85,9 @@ export default function ProvisionalPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectName: normalizedName, ptCaseNumbers: parsedCases, dryRun }),
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? '초기화에 실패했습니다.');
+      const payload = await readApiObject(response, '초기화에 실패했습니다.');
       if (dryRun) {
+        if (typeof payload.destination !== 'string' || !payload.destination.trim()) throw new Error('검증 결과의 생성 경로를 확인할 수 없습니다.');
         setNotice({ kind: 'success', text: `검증 완료: ${payload.destination}에 생성할 수 있습니다. 실제 폴더는 만들지 않았습니다.` });
       } else {
         setNotice({ kind: 'success', text: '프로젝트가 초기화되었습니다. 3단계 원본 자료 투입이 현재 단계로 선택되었습니다.' });

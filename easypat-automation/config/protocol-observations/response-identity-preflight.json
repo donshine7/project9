@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-09-15",
+  "status": "offline-preflight-passed-production-disabled",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.main-record.v1",
+  "sourceSessionId": 168,
+  "searchIdentityField": "idx",
+  "statementPredicateColumn": "idx",
+  "responseIdentityColumn": "idx",
+  "uniqueStatementPredicate": true,
+  "encryptedTemplateFingerprintVerified": true,
+  "serverRequestSent": false,
+  "rawStatementStoredOrReturned": false,
+  "internalIdentityStoredOrReturned": false,
+  "productionEnabled": false,
+  "nextRequirement": "One explicitly approved live read using an ephemeral allowlist and a new one-time attempt gate; enable the production template only after returned idx equality succeeds."
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-15",
+  "matterReference": "P261793",
+  "searchSessionId": 119,
+  "detailSessionIds": [168, 170],
+  "localValidatorImplemented": true,
+  "searchResponseRetrievedThisStep": true,
+  "actualLinkageVerified": true,
+  "verificationScope": "single captured P261793 value equality; not general primary-key or binding validation",
+  "status": "captured-value-linkage-verified",
+  "blocker": null,
+  "evidence": "matter-linkage-evidence.json",
+  "nextStep": "protected fixed request storage and parameter binding, followed by HTTPS client and authentication validation",
+  "executable": false,
+  "rawStatementsStored": false,
+  "internalValuesStored": false
+}

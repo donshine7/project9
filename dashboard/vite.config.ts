@@ -1,7 +1,7 @@
 import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
-import { defineConfig } from 'vite';
+import { defineConfig, type ViteDevServer } from 'vite';
 import { localApiMiddleware } from './local-api';
 
 export default defineConfig(async () => {
@@ -21,7 +21,7 @@ export default defineConfig(async () => {
     plugins: [
       {
         name: 'local-project-api',
-        configureServer(server) {
+        configureServer(server: ViteDevServer) {
           server.middlewares.use(localApiMiddleware());
         },
       },

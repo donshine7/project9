@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "productionEnabled": true,
+  "status": "generic-summary-validated-progress-candidate-document-source-discovery-required",
+  "requiredDistinctNonBaselineMatterValidations": 2,
+  "completedDistinctNonBaselineMatterValidations": 2,
+  "baselineMatterReference": "P261793",
+  "authorizedNonBaselineMatterReferences": ["PT261129", "PT261130"],
+  "validatedNonBaselineMatterReferences": ["PT261129", "PT261130"],
+  "templates": [
+    {
+      "templateId": "matter-search.exact-count.v1",
+      "operation": "search-matter",
+      "command": "SELECT",
+      "statementCount": 1,
+      "productionEnabled": true,
+      "baseFingerprint": "9cd0469ce54f093542d0b3c3283183754f198ccbbeb572eba8c6b18305710ff5",
+      "parameterization": {
+        "mode": "repeated-like-contains",
+        "source": "matter-reference",
+        "predicateColumn": "ourref",
+        "baseMatterReference": "P261793",
+        "expectedOccurrenceCount": 4
+      },
+      "responseCountColumn": "recCount",
+      "expectedResponseColumns": ["recCount"],
+      "status": "encrypted-capture-round-trip-verified"
+    },
+    {
+      "templateId": "matter-search.exact-result.v1",
+      "operation": "search-matter",
+      "command": "SELECT",
+      "statementCount": 1,
+      "productionEnabled": true,
+      "baseFingerprint": "c6b9134f8874604115accc13cbe6f6f113f93097c47bb81ec22909dbb83ad712",
+      "parameterization": {
+        "mode": "repeated-like-contains",
+        "source": "matter-reference",
+        "predicateColumn": "ourref",
+        "baseMatterReference": "P261793",
+        "expectedOccurrenceCount": 4
+      },
+      "responseMatterColumn": "ourref",
+      "responseIdentityColumn": "idx",
+      "expectedResponseColumns": ["idx", "div", "app_right", "ourref", "appref", "yourref", "code", "n_app", "n_issue", "title_kor", "applicant", "d_abandon", "d_duedate", "status"],
+      "status": "encrypted-capture-round-trip-verified"
+    },
+    {
+      "templateId": "matter-detail.main-record.v1",
+      "operation": "get-matter-detail",
+      "command": "SELECT",
+      "statementCount": 1,
+      "productionEnabled": true,
+      "baseFingerprint": "395d3846390487f222efd49cbfa2b8a42755ec6e43d68387853bdf07f027b835",
+      "parameterization": {
+        "mode": "single-scalar-equality",
+        "source": "verified-search-identity",
+        "predicateColumn": "idx",
+        "sourceTemplateId": "matter-search.exact-result.v1",
+        "sourceColumn": "idx"
+      },
+      "responseVerification": {
+        "mode": "statement-literal-equality",
+        "predicateColumn": "idx",
+        "responseColumn": "idx"
+      },
+      "expectedResponseColumnsSource": "main-record-response-schema.json",
+      "status": "cross-matter-live-validated"
+    },
+    {
+      "templateId": "matter-detail.progress-records.v1",
+      "operation": "list-progress",
+      "command": "SELECT",
+      "statementCount": 1,
+      "productionEnabled": false,
+      "baseFingerprint": "4b1f31613e243086f905cbaf101a6fab0bad0c104954becfb5d07719b95c912b",
+      "parameterization": {
+        "mode": "single-scalar-equality",
+        "source": "verified-search-identity",
+        "predicateColumn": "idx_parent",
+        "sourceTemplateId": "matter-search.exact-result.v1",
+        "sourceColumn": "idx"
+      },
+      "responseVerification": {
+        "mode": "statement-literal-all-rows",
+        "predicateColumn": "idx_parent",
+        "responseColumn": "idx_parent"
+      },
+      "expectedResponseColumns": ["serial", "sourcecode", "idx", "idx_parent", "no_rec", "d_rec", "d_noti", "rec_doc", "rec_div", "rec_ck", "rec_memo", "rec_memo1", "rec_memo2", "rec_memo3", "d_brief_due", "d_brief", "clerk_br", "clerk_br_id", "d_opinion_due", "d_opinion", "op_doc", "d_proc", "proc_memo", "n_extend", "d_extend", "d_due", "d_pre", "d_pre_rep", "pre_doc", "pre_memo", "no_pre", "judge", "clerk", "clerk_id", "part_class", "part_code", "part", "pre_div", "memo", "d_sort", "d_pat_rep", "d_direct", "direct_memo", "ck_proc", "method", "d_modify", "del_flag", "clerk_op", "clerk_op_id", "d_pre_due", "clerk_pr", "clerk_pr_id", "ck_ids", "d_edit", "sort"],
+      "requiredDistinctNonBaselineMatterValidations": 2,
+      "completedDistinctNonBaselineMatterValidations": 0,
+      "status": "offline-candidate-live-cross-matter-validation-required"
+    }
+  ],
+  "guarantees": {
+    "callerSuppliedSqlAccepted": false,
+    "internalIdentityReturned": false,
+    "automaticRetryEnabled": false,
+    "mutationEnabled": false,
+    "fixedP261793ProductionPolicyChanged": false,
+    "genericMatterSummaryProductionEnabled": true,
+    "genericProgressProductionEnabled": false,
+    "genericDocumentsProductionEnabled": false,
+    "genericDownloadProductionEnabled": false
+  }
+}

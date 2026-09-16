@@ -1,0 +1,21 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { analysisPacket, prepareAnalysis } from '../lib/analysis';
+import { auditMailLinks } from '../lib/link-audit';
+
+const directory = process.argv[2];
+if (!directory) throw Error('Usage: Prepare-ReferenceFacts NEW_PRIVATE_DIRECTORY');
+const root = path.resolve(directory);
+mkdirSync(root);
+const audit = auditMailLinks();
+type AuditFinding = (typeof audit.findings)[number];
+const findings = audit.findings.filter((f: AuditFinding) => ['unregistered_ref', 'unknown_pattern'].includes(f.kind));
+const mailIds = [...new Set<string>(findings.map((f: AuditFinding) => String(f.mailId)))];
+if (!mailIds.length) throw Error('No reference questions');
+const run = prepareAnalysis('mail_fact_extraction', mailIds);
+const packet = analysisPacket(run.runId);
+const save = (name: string, value: unknown) => writeFileSync(path.join(root, name), JSON.stringify(value, null, 2), { flag: 'wx' });
+save('audit-before.json', audit);
+save('packet.json', packet);
+save('view.json', { ...packet, context: { ...packet.context, candidates: [] }, findings });
+console.log(JSON.stringify({ ...run, findings: findings.length, directory: root }));

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "status": "live-progress-list-projection-validated",
+  "matterReference": "P261793",
+  "templateId": "matter-detail.progress-records.v1",
+  "rowCount": 2,
+  "allowlistedFieldCountPerRow": 13,
+  "nonNullBusinessFieldNames": ["document"],
+  "rawBusinessValuesStored": false,
+  "rawRowsReturnedOrStored": false,
+  "internalIdentitiesReturnedOrStored": false,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false
+}

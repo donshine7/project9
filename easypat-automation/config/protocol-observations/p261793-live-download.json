@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "status": "live-document-download-validated",
+  "matterReference": "P261793",
+  "sourceTemplateId": "matter-detail.documents.v1",
+  "selectionPosition": 2,
+  "fileName": "P261545외_수임내역서(수정).jpg",
+  "fileSizeBytes": 51373,
+  "contentType": "image/jpeg",
+  "sha256": "74fe072fb2ac8e0ac0e989370a82ef7770f00eccaffa4a9df2f43cf47817c778",
+  "freshVerifiedListUsed": true,
+  "sameAuthenticatedSessionUsed": true,
+  "sameOriginOnly": true,
+  "tlsVerificationRequired": true,
+  "exactLengthMatched": true,
+  "overwritten": false,
+  "automaticRetryPerformed": false,
+  "serverMutationPerformed": false,
+  "rawServerPathReturnedOrStored": false,
+  "cookieReturnedOrStored": false,
+  "productionEnabled": true
+}

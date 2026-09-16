@@ -1,0 +1,11 @@
+import { writeFileSync } from 'node:fs';
+import { analysisMailIndex, analysisPacket, prepareAnalysis } from '../lib/analysis';
+import { hasExactMatterReference } from '../lib/matter-number';
+const [output, ...prefixes] = process.argv.slice(2);
+if (!output || !prefixes.length) throw new Error('Output and mail prefixes required');
+const index = analysisMailIndex();
+const mailIds = prefixes.map(p => { const matches = index.filter(m => String(m.id).startsWith(p)); if (matches.length !== 1) throw new Error(`Mail prefix ${p}`); return String(matches[0].id); });
+const run = prepareAnalysis('mail_fact_extraction', mailIds), packet = analysisPacket(run.runId);
+const scope = packet.mails.map((mail: { id: string; subject: string }) => ({ mailId: mail.id, targetMatterRefs: packet.context.links.filter((l: { mail_id: string }) => l.mail_id === mail.id).map((l: { matter_id: string }) => packet.context.entities[`matter:${l.matter_id}`]?.our_ref).filter((ref: string) => ref && hasExactMatterReference(mail.subject, ref)) }));
+writeFileSync(output, JSON.stringify({ ...packet, taskScope: scope }, null, 2), { flag: 'wx' });
+console.log(JSON.stringify({ ...run, output, scope }));

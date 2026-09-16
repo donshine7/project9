@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "sessionId": 32,
+  "source": "Fiddler Form-Data Copy -> local private stdin; full five-statement batch",
+  "status": "captured-batch-binding-and-credential-free-template-storage-verified",
+  "command": "OTHERS",
+  "statementCount": 5,
+  "statements": [
+    {"index": 0, "verb": "SELECT", "role": "company settings", "table": "opms_code_setting", "literalCount": 3},
+    {"index": 1, "verb": "SELECT", "role": "user credential comparison and workstation metadata", "tables": ["opms_login_member", "opms_login_macads"], "literalCount": 7},
+    {"index": 2, "verb": "SELECT", "role": "user access rights", "table": "opms_login_member_right", "literalCount": 16},
+    {"index": 3, "verb": "SELECT", "role": "server date", "resultColumn": "today", "literalCount": 0},
+    {"index": 4, "verb": "SELECT", "role": "server time", "resultColumn": "nowtime", "literalCount": 1}
+  ],
+  "capturedUsernamesEqual": true,
+  "usernameSlotCount": 3,
+  "passwordSlotCount": 1,
+  "fixedLiteralCount": 23,
+  "replacementRoundTripVerified": true,
+  "originalCredentialsRetainedInTemplate": false,
+  "operationalTemplatePersisted": true,
+  "operationalTemplateCredentialFree": true,
+  "operationalTemplateStorage": "Windows-DPAPI-CurrentUser; live disabled",
+  "operationalTemplateEvidence": "../authentication-template.json",
+  "rawCapturePersisted": false,
+  "clipboardValueReplacedAfterInspection": true,
+  "credentialCharacterScope": "printable ASCII only",
+  "authenticationVerified": false,
+  "executable": false,
+  "newServerRequestsSent": 0
+}

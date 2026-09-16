@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-15",
+  "matterReference": "P261793",
+  "sessionId": 174,
+  "templateId": "matter-detail.progress-records.v1",
+  "request": {
+    "method": "POST",
+    "command": "SELECT",
+    "statementCount": 1,
+    "statementMaskedByFiddlerMcp": true,
+    "originalStatementInspectedLocally": true,
+    "readOnlyGuardPassed": true,
+    "fingerprintRecorded": true
+  },
+  "response": {
+    "statusCode": 200,
+    "contentType": "text/resultset;charset=UTF-8",
+    "rowCount": 2,
+    "columnCount": 55,
+    "maskedValueCount": 52,
+    "roleAssessment": "progress-records-candidate",
+    "roleEvidenceColumns": ["d_rec", "d_noti", "rec_doc", "rec_memo", "d_due", "clerk", "memo"]
+  },
+  "templateLinkage": {
+    "validatedMainTemplate": "matter-detail.main-record.v1",
+    "progressPredicateColumn": "idx_parent",
+    "mainIdentityColumn": "idx",
+    "matchingPredicateCount": 1,
+    "matterReference": "P261793"
+  },
+  "encryptedTemplateStored": true,
+  "encryptedTemplateRoundTripVerified": true,
+  "liveValidation": {
+    "status": "live-progress-read-validated",
+    "rowCount": 2,
+    "columnCount": 55,
+    "allRowsIdentityMatched": true,
+    "schemaMatched": true,
+    "automaticRetryPerformed": false,
+    "serverMutationPerformed": false
+  },
+  "productionEnabled": true,
+  "rawRowValuesReturnedOrStored": false,
+  "projection": {
+    "implemented": true,
+    "allowlistedFieldCount": 13,
+    "liveValidated": true,
+    "liveRowCount": 2,
+    "nonNullBusinessFieldNames": ["document"],
+    "rawRowsReturned": false,
+    "internalIdentitiesReturned": false
+  },
+  "nextRequirement": "Identify and validate the separate P261793 document-list request before implementing any download."
+}
