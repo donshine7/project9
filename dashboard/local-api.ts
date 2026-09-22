@@ -44,6 +44,12 @@ import { recordAuditFeedback } from './lib/audit-feedback';
 import { recordGroupReviewFeedback } from './lib/group-review';
 import { addWikiEntry, reviewWiki, wikiDetail, wikiEvidence, wikiIndex } from './lib/wiki';
 import {
+  scanWikiMarkdownVault,
+  wikiMarkdownDetail,
+  wikiMarkdownIndex,
+  wikiMarkdownScanIssues,
+} from './lib/wiki-markdown';
+import {
   completeWorkRefreshStage,
   createWorkRefresh,
   failWorkRefreshStage,
@@ -347,6 +353,8 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
   const wikiRoute = pathname.match(/^\/api\/wiki\/(matter|organization|person|group)\/([^/]+)(?:\/(entries))?$/);
   const wikiReviewRoute = pathname.match(/^\/api\/wiki\/drafts\/([^/]+)\/review$/);
   const wikiEvidenceRoute = pathname.match(/^\/api\/wiki\/evidence\/([^/]+)$/);
+  const wikiMarkdownDocumentRoute = pathname.match(/^\/api\/wiki-markdown\/documents\/([^/]+)$/);
+  const wikiMarkdownScanIssuesRoute = pathname.match(/^\/api\/wiki-markdown\/scans\/([^/]+)\/issues$/);
   const matterRoute = pathname.match(/^\/api\/matters\/([^/]+)$/);
   const matterChildRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(work-items|notes|actions)$/);
   const relationRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(organizations|people|groups)$/);
@@ -394,7 +402,10 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     || Boolean(analysisReviewRoute)
     || Boolean(analysisFeedbackRoute)
     || pathname === '/api/wiki'
+    || pathname === '/api/wiki-markdown'
+    || pathname === '/api/wiki-markdown/scans'
     || Boolean(wikiRoute || wikiReviewRoute || wikiEvidenceRoute)
+    || Boolean(wikiMarkdownDocumentRoute || wikiMarkdownScanIssuesRoute)
     || Boolean(workRefreshRoute || workRefreshStageCreateRoute || workRefreshStageRoute || workRefreshResultRoute || workRefreshFinalizeRoute)
     || Boolean(downloadNoticeRoute || downloadNoticeRecheckRoute || downloadNoticePreviewRoute || downloadNoticeProjectRoute || downloadNoticeProjectLinkRoute || downloadJobEventsRoute || downloadJobResumeRoute)
     || Boolean(responseProjectRoute || responseReconcileRoute || responseStageRoute || responseApprovalRoute || responseTaskRoute)
@@ -449,6 +460,10 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
       return { status: 200, payload: updateOrganizationBusinessType(decodeURIComponent(organizationBusinessTypeRoute[1]), body.businessType, body.expectedVersion) };
     }
     if (req.method === 'GET' && pathname === '/api/wiki') return { status: 200, payload: { entities: wikiIndex(requestUrl.searchParams.get('q') || '') } };
+    if (req.method === 'GET' && pathname === '/api/wiki-markdown') return { status: 200, payload: wikiMarkdownIndex() };
+    if (req.method === 'POST' && pathname === '/api/wiki-markdown/scans') return { status: 201, payload: await scanWikiMarkdownVault() };
+    if (req.method === 'GET' && wikiMarkdownDocumentRoute) return { status: 200, payload: await wikiMarkdownDetail(decodeURIComponent(wikiMarkdownDocumentRoute[1])) };
+    if (req.method === 'GET' && wikiMarkdownScanIssuesRoute) return { status: 200, payload: { issues: wikiMarkdownScanIssues(decodeURIComponent(wikiMarkdownScanIssuesRoute[1])) } };
     if (req.method === 'GET' && wikiEvidenceRoute) return { status: 200, payload: wikiEvidence(decodeURIComponent(wikiEvidenceRoute[1])) };
     if (req.method === 'POST' && wikiReviewRoute) {
       const body = await readBody(req, 64 * 1024);

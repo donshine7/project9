@@ -7,6 +7,9 @@
 .phase4-test/
 .client-test/
 .environment-test/
+.wiki-markdown-test/
+.wiki-eval/
+.eval-runs/
 .registration-test/
 .analysis-ingest/
 .assignee-confirmation-test/

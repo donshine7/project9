@@ -1,6 +1,6 @@
 # 협업 전환 계획 — 2026-09-22
 
-상태: v2로 개정. 1단계 완료, Wiki 본문 원본 전환은 구현 전이다.
+상태: v2로 개정. 단계 3의 WIKI-01·EVAL-01 완료, Wiki 본문 원본 전환은 아직 수행하지 않았다.
 
 전체 작업의 현재 기준은 [Wiki Markdown 원본 전체 기획](WIKI_MARKDOWN_MASTER_PLAN_2026-09-22.md)과 [이관·복구·평가 계약](WIKI_MARKDOWN_MIGRATION_AND_EVAL_2026-09-22.md)이다. 사용자 요청에 따라 기존 단방향 export 목표를 대체한다. 아래는 개정 계획의 요약이다.
 
@@ -92,4 +92,6 @@
 
 단계 1의 근거와 제한은 [BASELINE_2026-09-22.md](BASELINE_2026-09-22.md)에 기록한다.
 
-단계 2의 ENV-01·DOC-01 구현과 검사 결과는 [ENV01_DOC01_RESULT_2026-09-22.md](ENV01_DOC01_RESULT_2026-09-22.md)에 기록한다. 다음 단계는 합성 fixture를 사용하는 EVAL-01과 Markdown reader/indexer인 WIKI-01이다.
+단계 2의 ENV-01·DOC-01 구현과 검사 결과는 [ENV01_DOC01_RESULT_2026-09-22.md](ENV01_DOC01_RESULT_2026-09-22.md)에 기록한다.
+
+단계 3의 WIKI-01·EVAL-01 구현, 별도 Runner/Grader 프로젝트와 합성 평가 결과는 [STAGE3_WIKI_EVAL_RESULT_2026-09-22.md](STAGE3_WIKI_EVAL_RESULT_2026-09-22.md)에 기록한다. 다음 단계는 AI 개정 제안 WIKI-02와 일회성 dry-run 이관 MIG-01이다.

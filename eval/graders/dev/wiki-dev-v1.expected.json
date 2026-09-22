@@ -1,0 +1,14 @@
+{
+  "schema": "wiki-eval-expected-v1",
+  "datasetId": "wiki-dev-v1",
+  "expected": {
+    "documentCount": 3,
+    "issueCount": 0,
+    "revisionCount": 3,
+    "documents": [
+      { "docId": "wiki-knowledge-source-boundary", "documentType": "knowledge", "parseStatus": "valid" },
+      { "docId": "wiki-matter-p260001-cn-pa", "documentType": "entity_wiki", "parseStatus": "valid" },
+      { "docId": "wiki-note-review-synthetic", "documentType": "note", "parseStatus": "valid" }
+    ]
+  }
+}

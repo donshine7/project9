@@ -39,6 +39,12 @@
 
 데이터 기반 검증은 `npm run test:phase1`, 메일 수집·중복 방지·날짜별 요약 검증은 `npm run test:phase2`로 실행합니다.
 
+## Markdown Wiki 인덱스와 독립 평가
+
+업무 Wiki 본문은 Vault의 Markdown이 원본이며 SQLite에는 본문이 아니라 문서 식별자, 엔티티 연결, hash, scan·revision·issue만 저장합니다. `GET /api/wiki-markdown`은 인덱스, `POST /api/wiki-markdown/scans`는 명시적 재검색, `GET /api/wiki-markdown/documents/:docId`는 현재 파일 본문과 stale 여부, `GET /api/wiki-markdown/scans/:scanId/issues`는 검색 오류를 반환합니다. 기존 `/api/wiki`는 이 단계에서 유지합니다.
+
+파서·수정·이동·누락·이력·경로 탈출 검사는 `npm run test:wiki-markdown`으로 실행합니다. 합성 평가는 `npm run eval:wiki:runner`가 정답 없이 실행물을 고정하고, 별도 프로젝트의 `npm run eval:wiki:grader`가 hash와 기대값을 검사합니다. 폴더 초기화와 매 실행 절차는 `../eval/README.md`를 따릅니다.
+
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.
 # 3단계 분석·검토
 

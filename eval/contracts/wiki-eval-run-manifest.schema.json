@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sspat.local/schemas/wiki-eval-run-v1.json",
+  "title": "SSPAT Wiki evaluation frozen run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "runId", "createdAt", "candidate", "dataset", "environment", "artifacts", "trace"],
+  "properties": {
+    "schema": { "const": "wiki-eval-run-v1" },
+    "runId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitCommit", "gitDirty"],
+      "properties": {
+        "gitCommit": { "type": ["string", "null"] },
+        "gitDirty": { "type": ["boolean", "null"] }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "manifestSha256", "seedSha256", "inputTreeSha256"],
+      "properties": {
+        "id": { "type": "string" },
+        "manifestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "seedSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "inputTreeSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtimeProfile", "isolatedRoot", "databasePath", "vaultPath", "exposedPaths"],
+      "properties": {
+        "runtimeProfile": { "const": "eval" },
+        "isolatedRoot": { "type": "string" },
+        "databasePath": { "type": "string" },
+        "vaultPath": { "type": "string" },
+        "exposedPaths": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+      "required": ["database", "vaultTree", "wikiIndex", "wikiIssues"]
+    },
+    "trace": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "status"],
+        "properties": {
+          "step": { "type": "string" },
+          "status": { "enum": ["succeeded", "failed"] },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  }
+}

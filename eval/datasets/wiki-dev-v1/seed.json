@@ -1,0 +1,16 @@
+{
+  "schema": "wiki-eval-seed-v1",
+  "matters": [
+    {
+      "id": "matter-eval-p260001-cn-pa",
+      "ourRef": "P260001-CN-PA",
+      "office": "상상특허",
+      "matterKind": "patent",
+      "countryCode": "CN",
+      "baseRef": "P260001",
+      "parentRef": "P260001",
+      "relationType": "national_phase",
+      "suffixes": ["CN", "PA"]
+    }
+  ]
+}

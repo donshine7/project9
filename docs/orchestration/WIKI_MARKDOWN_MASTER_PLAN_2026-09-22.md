@@ -206,8 +206,8 @@ MVP에서는 AI가 `80_Proposals`에 제안을 쓰고 사람이 Obsidian에서 �
 | 1 완료 | BASELINE | 기존 성과와 DB 보존 | commit/tag·백업·검사 기록 유지 |
 | 2 완료 | ENV-01 | 환경 경로 계약·fail-closed guard·도구 프로필 | `ENV01_DOC01_RESULT_2026-09-22.md`의 자동·smoke 검사 통과 |
 | 2 완료 | DOC-01 | v2 문서/근거/검토/이관 계약 확정 | `config/wiki-document.schema.json`과 v1 계약으로 고정 |
-| 3 | EVAL-01 | Runner/Grader 구성, 기존 검사+Wiki fixture | 한 run의 코드·DB·Vault·근거 snapshot 고정과 별도 채점 |
-| 3 | WIKI-01 | Markdown 읽기·인덱스·버전 보존·재검색 | 사람 편집·이동·누락·복구를 합성 데이터로 검증 |
+| 3 완료 | EVAL-01 | Runner/Grader 구성, 기존 검사+Wiki fixture | 별도 프로젝트에서 한 run의 코드·DB·Vault·출력 snapshot 고정, 16/16 결정적 채점 통과 |
+| 3 완료 | WIKI-01 | Markdown 읽기·인덱스·버전 보존·재검색 | 사람 편집·이동·누락·복구·symlink 차단을 합성 데이터로 검증 |
 | 4 | WIKI-02 | AI 개정 제안과 근거 검사 | base hash 보호, 사람 수정 유지, 오래된 근거 차단 |
 | 4 | MIG-01 | DB Wiki→Markdown 일회성 변환·dry-run | 본문/근거/과거 개정 대조, 재실행 중복 없음 |
 | 5 | UX-01 | Figma 승인 → 대시보드 Markdown 보기/검토 | 원본·최신본·검토본·DB 상태·충돌 의미 일치 |
@@ -218,7 +218,7 @@ MVP에서는 AI가 `80_Proposals`에 제안을 쓰고 사람이 Obsidian에서 �
 | 후속 | EDIT-01 | 검토된 AI 변경 자동 반영 | 사람/AI 쓰기 조정과 crash/경쟁 테스트 통과 |
 | 후속 | CLEANUP-01 | 레거시 본문 저장 축소 | 소비자 전환·이관·복구 확인 후 승인된 보존 정책 적용 |
 
-환경/계약 확정 후 EVAL-01과 WIKI-01을 병렬로 진행한다. Figma 흐름 설계는 같은 계약으로 먼저 진행할 수 있다. schema·공용 파일 통합은 총괄이 순서를 정한다. EVAL-02 통과 전에는 실제 문서의 원본을 전환하지 않는다.
+단계 3 결과는 [STAGE3_WIKI_EVAL_RESULT_2026-09-22.md](STAGE3_WIKI_EVAL_RESULT_2026-09-22.md)에 기록했다. 다음은 WIKI-02와 MIG-01이며, schema·공용 파일 통합은 총괄이 순서를 정한다. EVAL-02 통과 전에는 실제 문서의 원본을 전환하지 않는다.
 
 기존 업무 개선은 다음 묶음으로 병행 관리한다.
 

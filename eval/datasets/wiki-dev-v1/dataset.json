@@ -1,0 +1,13 @@
+{
+  "schema": "wiki-eval-dataset-v1",
+  "id": "wiki-dev-v1",
+  "visibility": "public-development",
+  "description": "WIKI-01 Markdown 인덱스와 변경 이력을 검증하는 합성 데이터셋",
+  "inputRoot": "input",
+  "seed": "seed.json",
+  "rules": [
+    "실제 사건·고객·메일 데이터는 포함하지 않는다.",
+    "Runner에는 이 입력과 실행 계약만 전달한다.",
+    "holdout 정답과 채점기는 Grader 프로젝트에만 둔다."
+  ]
+}
