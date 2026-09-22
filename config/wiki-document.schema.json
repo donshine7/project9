@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sspat.local/schemas/wiki-document-v1.json",
+  "title": "SSPAT Wiki Markdown frontmatter v1",
+  "type": "object",
+  "required": ["schema_version", "doc_id", "document_type", "title"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "wiki-md-v1"
+    },
+    "doc_id": {
+      "type": "string",
+      "pattern": "^wiki-[a-z0-9][a-z0-9-]{2,127}$"
+    },
+    "document_type": {
+      "enum": ["entity_wiki", "knowledge", "note"]
+    },
+    "entity_type": {
+      "enum": ["matter", "organization", "person", "group", "topic", null]
+    },
+    "entity_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 },
+      "uniqueItems": true,
+      "maxItems": 30
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[^#\\s][^\\s]{0,99}$" },
+      "uniqueItems": true,
+      "maxItems": 50
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "document_type": { "const": "entity_wiki" } },
+        "required": ["document_type"]
+      },
+      "then": {
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_type": { "enum": ["matter", "organization", "person", "group"] },
+          "entity_id": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "document_type": { "enum": ["knowledge", "note"] } },
+        "required": ["document_type"]
+      },
+      "then": {
+        "properties": {
+          "entity_type": { "enum": ["topic", null] },
+          "entity_id": { "type": ["string", "null"] }
+        }
+      }
+    }
+  ]
+}

@@ -6,6 +6,11 @@ import { promisify } from 'node:util';
 import { stageStatus, workflowStages } from './app/workflow';
 import { MatterNumberError } from './lib/matter-number';
 import {
+  assertOperationalToolAccess,
+  resolveProvisionalProjectRoot,
+  RuntimeEnvironmentError,
+} from './lib/runtime-environment';
+import {
   archiveAction,
   archiveMatter,
   archiveNote,
@@ -86,7 +91,6 @@ import {
 } from './lib/specification-projects';
 
 const execFileAsync = promisify(execFile);
-const PROJECT_ROOT = path.resolve('C:\\ChatGPT\\AI-Work\\10_특허\\한국특허가출원');
 const PROJECT_NAME_PATTERN = /^[A-Za-z0-9가-힣][A-Za-z0-9가-힣 _-]{1,79}$/;
 const PT_PATTERN = /^PT\d{6}(?:-[A-Z0-9]+)*$/i;
 const EXCLUDED_PROJECT_NAMES = new Set(['_shared', '_sample', 'archive', 'archived']);
@@ -106,7 +110,7 @@ function json(res: any, statusCode: number, payload: unknown) {
 }
 
 function isInsideRoot(candidate: string) {
-  const root = path.resolve(PROJECT_ROOT);
+  const root = resolveProvisionalProjectRoot();
   const resolved = path.resolve(candidate);
   return resolved === root || resolved.startsWith(`${root}${path.sep}`);
 }
@@ -180,7 +184,7 @@ async function inferStage(projectPath: string) {
 }
 
 async function projectSummary(projectName: string) {
-  const projectPath = path.join(PROJECT_ROOT, projectName);
+  const projectPath = path.join(resolveProvisionalProjectRoot(), projectName);
   const status = await readJsonFile<ProjectStatusFile>(path.join(projectPath, 'workflow-status.json'));
   const inferred = await inferStage(projectPath);
   const statusStage = status?.currentStage && status.currentStage >= 1 && status.currentStage <= 13 ? status.currentStage : 0;
@@ -201,8 +205,9 @@ async function projectSummary(projectName: string) {
 }
 
 async function listProjects() {
+  const projectRoot = resolveProvisionalProjectRoot();
   try {
-    const entries = await readdir(PROJECT_ROOT, { withFileTypes: true });
+    const entries = await readdir(projectRoot, { withFileTypes: true });
     const candidates = entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith('.') && !EXCLUDED_PROJECT_NAMES.has(entry.name.toLowerCase()));
     const eligible = await Promise.all(candidates.map(async (entry) => ({ entry, eligible: await isProjectStructure(entry.name) })));
     const projects = await Promise.all(eligible.filter((item) => item.eligible).map((item) => projectSummary(item.entry.name)));
@@ -213,7 +218,7 @@ async function listProjects() {
 }
 
 async function isProjectStructure(projectName: string) {
-  const projectPath = path.join(PROJECT_ROOT, projectName);
+  const projectPath = path.join(resolveProvisionalProjectRoot(), projectName);
   return (await exists(path.join(projectPath, 'workflow-status.json')))
     || (await exists(path.join(projectPath, 'patent.project.json')))
     || (await exists(path.join(projectPath, '10_source_original')) && await exists(path.join(projectPath, '40_draft')) && await exists(path.join(projectPath, 'outputs')));
@@ -259,7 +264,8 @@ async function initializeProject(body: any) {
   const validated = validateInput(body);
   if ('error' in validated) return { status: 400, payload: validated };
 
-  const projectPath = path.join(PROJECT_ROOT, validated.projectName);
+  const projectRoot = resolveProvisionalProjectRoot();
+  const projectPath = path.join(projectRoot, validated.projectName);
   const scriptPath = path.resolve(process.cwd(), 'scripts', 'New-PatentProject.ps1');
   if (!isInsideRoot(projectPath) || !scriptPath.endsWith(path.join('scripts', 'New-PatentProject.ps1')) || !(await exists(scriptPath))) {
     return { status: 500, payload: { error: '고정 초기화 스크립트를 찾을 수 없습니다.' } };
@@ -269,7 +275,7 @@ async function initializeProject(body: any) {
   }
 
   const dryRun = body?.dryRun === true;
-  const destination = path.join(PROJECT_ROOT, validated.projectName);
+  const destination = path.join(projectRoot, validated.projectName);
   if (dryRun) {
     return {
       status: 200,
@@ -313,7 +319,7 @@ export function localApiMiddleware() {
     if (workApiResult) return json(res, workApiResult.status, workApiResult.payload);
 
     if (req.method === 'GET' && requestUrl.pathname === '/api/projects') {
-      return json(res, 200, { root: PROJECT_ROOT, projects: await listProjects() });
+      return json(res, 200, { root: resolveProvisionalProjectRoot(), projects: await listProjects() });
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/api/projects/init') {
@@ -535,6 +541,7 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
   } catch (error: any) {
     if (error?.code === 'PAYLOAD_TOO_LARGE') return { status: 413, payload: { error: error.message } };
     if (error instanceof WorkDbError) return { status: error.status, payload: { error: error.message, code: error.code } };
+    if (error instanceof RuntimeEnvironmentError) return { status: 409, payload: { error: error.message, code: error.code } };
     if (error instanceof MatterNumberError) return { status: 400, payload: { error: error.message, code: 'INVALID_MATTER_NUMBER' } };
     if (error instanceof SyntaxError) return { status: 400, payload: { error: '요청 본문이 올바른 JSON이 아닙니다.' } };
     console.error(error);
@@ -543,6 +550,7 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
 }
 
 async function syncOutlookMail(body: any) {
+  assertOperationalToolAccess('Outlook 메일 수집');
   const requestedAt = new Date().toISOString();
   const mode = ['day', 'week', 'range'].includes(body?.mode) ? body.mode : 'day';
   const to = new Date();

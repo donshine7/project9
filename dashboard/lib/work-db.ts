@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { matterReferenceTokens, parseMatterNumber } from './matter-number';
+import { resolveDatabasePath } from './runtime-environment';
 import { loadSourcePriorityPolicy, SOURCE_PRIORITY_VERSION } from './source-policy';
 
 export const SOURCE_TYPES = ['user_input', 'easy_pat', 'registration_mail', 'excel', 'mail_inference'] as const;
@@ -15,8 +15,6 @@ export const TEAM_MEMBERS = ['장진태', '박준호', '황현우'] as const;
 export const BUSINESS_TYPES = ['개인사업자', '법인', '미정'] as const;
 
 const MAX_TEXT = 10_000;
-const DEFAULT_DATA_ROOT = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'SSPAT', 'work-management');
-
 export type MatterCreateInput = {
   ourRef: string;
   note?: string | null;
@@ -88,11 +86,11 @@ export type OutlookMailRecord = {
 };
 
 function dataRoot() {
-  return process.env.SSPAT_WORK_DB_PATH ? path.dirname(path.resolve(process.env.SSPAT_WORK_DB_PATH)) : DEFAULT_DATA_ROOT;
+  return path.dirname(databasePath());
 }
 
 export function databasePath() {
-  return process.env.SSPAT_WORK_DB_PATH ? path.resolve(process.env.SSPAT_WORK_DB_PATH) : path.join(DEFAULT_DATA_ROOT, 'sspat-work.db');
+  return resolveDatabasePath();
 }
 
 export function backupDirectory() {

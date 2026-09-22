@@ -18,14 +18,13 @@ type Project = {
   stages: Stage[];
 };
 
-const fixedRoot = 'C:\\ChatGPT\\AI-Work\\10_특허\\한국특허가출원';
-
 function statusLabel(status: WorkflowStatus) {
   return status === '사용자 작업 필요' ? '사용자 작업' : status;
 }
 
 export default function ProvisionalPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectRoot, setProjectRoot] = useState('환경 경로 확인 중');
   const [selectedId, setSelectedId] = useState('');
   const [projectName, setProjectName] = useState('');
   const [ptCaseNumbers, setPtCaseNumbers] = useState('PT261225');
@@ -42,7 +41,9 @@ export default function ProvisionalPage() {
       const response = await fetch('/api/projects', { cache: 'no-store' });
       const payload = await readApiObject(response);
       if (!Array.isArray(payload.projects)) throw new Error('프로젝트 목록 응답 형식이 올바르지 않습니다.');
+      if (typeof payload.root !== 'string' || !payload.root.trim()) throw new Error('프로젝트 루트 응답 형식이 올바르지 않습니다.');
       const nextProjects = payload.projects as Project[];
+      setProjectRoot(payload.root);
       setProjects(nextProjects);
       const queryProject = new URLSearchParams(window.location.search).get('project');
       const nextSelected = preferredId ?? queryProject ?? selectedId;
@@ -135,7 +136,7 @@ export default function ProvisionalPage() {
               <input id="project-name" className="text-input" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="예: 2026_가출원_신규플랫폼" maxLength={80} />
               <label className="field-label" htmlFor="pt-numbers">PT 사건번호 목록</label>
               <textarea id="pt-numbers" className="text-input text-area" value={ptCaseNumbers} onChange={(event) => setPtCaseNumbers(event.target.value)} placeholder="PT261225, PT261226-S1" rows={3} />
-              <div className="path-preview"><span>생성 예정 경로</span><code>{fixedRoot}\\{projectName.trim() || '프로젝트명'}</code></div>
+              <div className="path-preview"><span>생성 예정 경로</span><code>{projectRoot}\\{projectName.trim() || '프로젝트명'}</code></div>
               <label className="dry-run-toggle"><input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} /><span>검증만 실행(dry-run) · 실제 폴더를 만들지 않음</span></label>
               <button className="primary-button" type="submit" disabled={submitting}>{submitting ? <LoaderCircle size={16} className="spin" /> : <FolderKanban size={16} />}{dryRun ? '초기화 검증' : '프로젝트 초기화 실행'}</button>
             </form>

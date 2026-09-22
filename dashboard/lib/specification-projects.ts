@@ -3,11 +3,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { lstat, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { resolveSpecificationProjectRoot } from './runtime-environment';
 import { SERVICE_TYPES, transaction, withDatabase, WorkDbError } from './work-db';
 import { SPECIFICATION_STAGE_KEYS, specificationSetupSteps, specificationStageNumber, specificationStages } from './specification-workflow';
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_ROOT = String.raw`C:\ChatGPT\AI-Work\10_특허\한국특허명세서작성`;
 const EXCLUDED = new Set(['_shared', '_eval', '프로젝트폴더샘플', 'archive', 'archived']);
 const INVENTION_TYPES = ['방법', '장치', '조성물', '혼합', '기타'] as const;
 const RESERVED = new Set(['CON', 'PRN', 'AUX', 'NUL', ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`), ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`)]);
@@ -44,7 +44,7 @@ type SetupInput = {
 };
 
 function rootPath() {
-  return path.resolve(process.env.SSPAT_SPEC_PROJECT_ROOT || DEFAULT_ROOT);
+  return resolveSpecificationProjectRoot();
 }
 
 function harnessPath() {

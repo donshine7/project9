@@ -29,6 +29,14 @@
 
 운영 SQLite 파일은 기본적으로 `%LOCALAPPDATA%\SSPAT\work-management\sspat-work.db`에 저장됩니다. `SSPAT_WORK_DB_PATH` 환경 변수를 지정하면 검증용 DB를 분리할 수 있습니다. 화면의 `DB 백업`은 DB 옆 `backups` 폴더에 일관된 스냅샷을 만들며, 복구 API는 이 폴더 안의 백업만 허용합니다.
 
+개발·평가 실행은 운영 DB로 자동 fallback하지 않습니다. 다음처럼 격리 실행 스크립트에 실행별 루트를 지정합니다.
+
+```powershell
+.\scripts\Start-Isolated-Dashboard.ps1 -IsolatedRoot "$env:TEMP\sspat-dev-run" -Profile development -Port 43173
+```
+
+이 스크립트는 DB, Wiki Vault, 중간사건·명세서·가출원 fixture 루트를 지정한 디렉터리 아래에 분리합니다. 개발·평가 프로필에서는 실제 Outlook 수집이 차단됩니다. 운영 실행은 기존 `대시보드 실행.cmd`를 사용하며 해당 시작 스크립트가 `operational` 프로필을 명시합니다. 상세 계약은 `docs/orchestration/ENVIRONMENT_AND_WIKI_CONTRACT_V1_2026-09-22.md`를 참고하세요.
+
 데이터 기반 검증은 `npm run test:phase1`, 메일 수집·중복 방지·날짜별 요약 검증은 `npm run test:phase2`로 실행합니다.
 
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.

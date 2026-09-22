@@ -15,10 +15,10 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { resolveNoticeProjectRoot } from './runtime-environment';
 import { transaction, withDatabase, WorkDbError } from './work-db';
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_PROJECT_ROOT = 'C:\\ChatGPT\\AI-Work\\10_특허\\한국특허중간사건대응';
 const PROJECT_NAME_PATTERN = /^[A-Za-z0-9가-힣][A-Za-z0-9가-힣 _().-]{1,119}$/;
 const CLIENT_LABEL_PATTERN = /^[A-Za-z0-9가-힣(][A-Za-z0-9가-힣 _().-]{0,79}$/;
 const RESERVED_WINDOWS_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
@@ -229,7 +229,7 @@ function kstDayStartIso() {
 }
 
 export function noticeProjectRoot() {
-  return path.resolve(process.env.SSPAT_NOTICE_PROJECT_ROOT || DEFAULT_PROJECT_ROOT);
+  return resolveNoticeProjectRoot();
 }
 
 export function getDownloadSummary() {

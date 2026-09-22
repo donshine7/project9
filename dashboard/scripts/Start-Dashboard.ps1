@@ -92,6 +92,7 @@ try {
   Write-Host 'Vinext 개발 서버 로그는 이 창에 표시됩니다.'
   Push-Location -LiteralPath $runtimeDir
   try {
+    $env:SSPAT_RUNTIME_PROFILE = 'operational'
     $env:SSPAT_PROJECT_ROOT = Split-Path -Parent $sourceDir
     & $npmPath run dev
     $devCode = $LASTEXITCODE

@@ -91,3 +91,5 @@
 ## 현재 단계
 
 단계 1의 근거와 제한은 [BASELINE_2026-09-22.md](BASELINE_2026-09-22.md)에 기록한다.
+
+단계 2의 ENV-01·DOC-01 구현과 검사 결과는 [ENV01_DOC01_RESULT_2026-09-22.md](ENV01_DOC01_RESULT_2026-09-22.md)에 기록한다. 다음 단계는 합성 fixture를 사용하는 EVAL-01과 Markdown reader/indexer인 WIKI-01이다.

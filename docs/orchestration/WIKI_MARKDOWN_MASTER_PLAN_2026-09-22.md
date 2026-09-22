@@ -204,8 +204,8 @@ MVP에서는 AI가 `80_Proposals`에 제안을 쓰고 사람이 Obsidian에서 �
 | 단계 | 티켓 | 구체 작업 | 완료 기준 |
 |---|---|---|---|
 | 1 완료 | BASELINE | 기존 성과와 DB 보존 | commit/tag·백업·검사 기록 유지 |
-| 2 | ENV-01 | 환경 경로 계약·fail-closed guard·도구 프로필 | 운영 DB/Vault/사건 접근 거부, 합성 환경으로 실행 |
-| 2 | DOC-01 | v2 문서/근거/검토/이관 계약 확정 | 각 필드 원본·ID·hash·편집 책임·API 합의 |
+| 2 완료 | ENV-01 | 환경 경로 계약·fail-closed guard·도구 프로필 | `ENV01_DOC01_RESULT_2026-09-22.md`의 자동·smoke 검사 통과 |
+| 2 완료 | DOC-01 | v2 문서/근거/검토/이관 계약 확정 | `config/wiki-document.schema.json`과 v1 계약으로 고정 |
 | 3 | EVAL-01 | Runner/Grader 구성, 기존 검사+Wiki fixture | 한 run의 코드·DB·Vault·근거 snapshot 고정과 별도 채점 |
 | 3 | WIKI-01 | Markdown 읽기·인덱스·버전 보존·재검색 | 사람 편집·이동·누락·복구를 합성 데이터로 검증 |
 | 4 | WIKI-02 | AI 개정 제안과 근거 검사 | base hash 보호, 사람 수정 유지, 오래된 근거 차단 |
