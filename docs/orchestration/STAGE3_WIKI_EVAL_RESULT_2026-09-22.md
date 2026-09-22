@@ -40,8 +40,9 @@
 - 격리 서버 필수 화면/API와 새 Wiki Markdown API smoke: 모두 HTTP 200, scan은 HTTP 201
 - 분리된 Runner 프로젝트 실행: 문서 3개 발견·3개 색인·issue 0개
 - 분리된 Grader 프로젝트 채점: **16/16 통과**
-- 실행 ID: `stage3-precommit-001`
-- 채점 보고서: `C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\reports\stage3-precommit-001.json`
+- 평가한 구현 commit: `f5a134c5d802d060b36881f1ccd384d29a724166` (`gitDirty=false`)
+- 최종 실행 ID: `stage3-f5a134c-001`
+- 채점 보고서: `C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\reports\stage3-f5a134c-001.json`
 
 이 개발 fixture의 통과는 도구 계약과 결정적 회귀를 검증한 것이며, 모델 의미 품질이나 실제 사건 holdout 성능을 의미하지 않는다.
 
