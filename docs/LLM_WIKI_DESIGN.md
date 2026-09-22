@@ -1,5 +1,11 @@
 # LLM Wiki 구조와 3단계 실행 계획
 
+## 2026-09-22 개정 안내
+
+이 문서의 SQLite 본문/파생 Wiki 설계는 현재 구현의 기록이다. 이후 목표는 **SQLite 업무 운영 원본 + Obsidian Markdown Wiki 본문 원본**이다. [전체 작업 기획 v2](orchestration/WIKI_MARKDOWN_MASTER_PLAN_2026-09-22.md)와 [이관·복구·평가 계약](orchestration/WIKI_MARKDOWN_MIGRATION_AND_EVAL_2026-09-22.md)을 적용한다.
+
+대시보드는 Vault의 원본 Markdown을 읽고 DB는 업무값·근거·revision/hash·검토를 관리한다. 기존 DB 본문은 일회성 이관과 복구 검증 후 레거시로 축소한다. 원본 코드·DB의 전환은 아직 시행하지 않았다. 아래 내용의 '원칙' 및 3·4단계는 구 구현 설명이며 새 목표 설계를 덮어쓰지 않는다.
+
 ## 원칙
 
 Wiki는 원본 DB를 대체하는 장문 문서가 아니라, 검증된 사실과 근거를 사람이 읽기 좋게 보여주는 파생 화면이다. SQLite가 상태·관계·이력의 원본이며 LLM은 초안을 제안한다. 별도 OpenAI API 키나 상시 실행 LLM 서버 없이 현재 Codex 프로젝트에서 모델별 작업을 수행한다. 웹의 메일 수집 버튼은 Outlook 수집만 수행하고 LLM 분석을 실행한 것처럼 표시하지 않는다.
