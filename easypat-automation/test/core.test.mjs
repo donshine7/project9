@@ -159,6 +159,12 @@ test("rejects mutation and arbitrary SQL intents", () => {
   assert.throws(() => validateProtocolIntent(safetyPolicy, { ...base, sql: "select 1" }), /SQL/);
 });
 
+test("keeps domestic report upload outside the enabled operation set", () => {
+  assert.ok(configuredSafetyPolicy.plannedOperationsNotYetEnabled.includes("upload-domestic-report"));
+  assert.equal(configuredSafetyPolicy.allowedOperations.includes("upload-domestic-report"), false);
+  assert.equal(configuredSafetyPolicy.mutationOperationsEnabled, false);
+});
+
 test("redacts authentication and SQL metadata recursively", () => {
   assert.deepEqual(
     redactSensitiveMetadata({
@@ -204,9 +210,11 @@ test("blocks UI detail replay while allowing only the identity-validated direct 
   assert.doesNotMatch(detailObservationText, /"cookieValue"\s*:/i);
 });
 
-test("permits only one exact live-validated document download",()=>{
+test("quarantines the captured shared-group download until matter binding is verified",()=>{
   assert.ok(configuredSafetyPolicy.allowedOperations.includes("download-document"));
-  assert.equal(configuredSafetyPolicy.documentDownloadConstraints.enabled,true);
+  assert.equal(configuredSafetyPolicy.documentDownloadConstraints.enabled,false);
+  assert.equal(configuredSafetyPolicy.documentDownloadConstraints.matterBindingVerified,false);
+  assert.equal(configuredSafetyPolicy.directReadConstraints["list-documents"].matterBindingVerified,false);
   assert.equal(configuredSafetyPolicy.documentDownloadConstraints.matterReference,"P261793");
   assert.equal(configuredSafetyPolicy.documentDownloadConstraints.sourceTemplateId,"matter-detail.documents.v1");
   assert.equal(configuredSafetyPolicy.documentDownloadConstraints.sameOriginOnly,true);

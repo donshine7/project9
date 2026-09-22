@@ -1,11 +1,12 @@
 const MASK=/!!!sanitized!!!|\[REDACTED\]|\*\*\*SANITIZED\*\*\*/i;
 const READ=/^(SELECT|WITH)\b/i;
 const READ_ANY=/\b(SELECT|WITH)\b/i;
+const SHELL=/SELECT\s*\|\s*WITH|Get-Clipboard|TrimStart\(|-match\s|\$[A-Za-z_]|\.mjs["']|\|\s*&/i;
 const FORBIDDEN=/\b(INSERT|UPDATE|DELETE|MERGE|UPSERT|REPLACE|EXEC(?:UTE)?|CALL|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|INTO|OPENROWSET|OPENQUERY|OPENDATASOURCE)\b/i;
 
 function accepted(sql,inputFormat){
   const value=sql.replace(/^\uFEFF/,"").trim();
-  if(!value||value.length>1024*1024||MASK.test(value)||!READ.test(value)||FORBIDDEN.test(value))throw new Error("COPIED_SQL_INPUT_REJECTED");
+  if(!value||value.length>1024*1024||MASK.test(value)||!READ.test(value)||FORBIDDEN.test(value)||SHELL.test(value))throw new Error("COPIED_SQL_INPUT_REJECTED");
   return Object.freeze({sql:value,inputFormat});
 }
 
@@ -29,18 +30,14 @@ export function normalizeCopiedSqlInput(raw){
   if(/%(?:2[0379A-F]|3[BCD-F]|5[B-D]|7[B-D])/i.test(value)||/^(?:SELECT|WITH)\+/i.test(value)){
     try{const decoded=decodeURIComponent(value.replaceAll("+"," "));if(READ.test(decoded.trim()))return accepted(decoded,"percent-encoded-sql-value");}catch{}
   }
-  const embedded=READ_ANY.exec(value);
-  if(embedded&&embedded.index>0&&embedded.index<=1024){
-    const prefix=value.slice(0,embedded.index);
-    if(!MASK.test(prefix)&&!FORBIDDEN.test(prefix)&&!/[;]/.test(prefix)&&!/password|passwd|pwd|cookie|authorization|session/i.test(value)&&!(value.includes("=")&&value.includes("&"))){
-      return accepted(value.slice(embedded.index),"prefixed-fiddler-cell-text");
-    }
-  }
+  // Never extract a SELECT word from unknown leading text. A copied shell
+  // command containing the SELECT|WITH regex is not a captured SQL request.
   throw new Error("COPIED_SQL_INPUT_REJECTED");
 }
 
 export function diagnoseCopiedSqlInput(raw){
   const value=typeof raw==="string"?raw.replace(/^\uFEFF/,"").trim():"";
   let normalized=null;try{normalized=normalizeCopiedSqlInput(raw);}catch{}
-  return Object.freeze({accepted:!!normalized,inputFormat:normalized?.inputFormat??"unrecognized",nonEmpty:value.length>0,masked:MASK.test(value),startsWithReadKeyword:READ.test(value),readKeywordAnywhere:READ_ANY.test(value),forbiddenTokenDetected:FORBIDDEN.test(value),looksLikeUrlencodedForm:value.includes("=")&&value.includes("&"),looksLikeNameValueRow:/^sql\t/i.test(value),looksLikeLabelledSql:/^sql\s*(?::|=|\r?\n)/i.test(value),looksPercentEncoded:/%[0-9a-f]{2}/i.test(value),looksQuotedString:value.startsWith('"')&&value.endsWith('"'),containsNul:value.includes("\u0000"),looksLikeResultset:value.includes("\u0001"),looksLikeJson:/^[{[]/.test(value),looksLikeHtml:/^<!(?:doctype)|^<html\b/i.test(value),rawValueReturned:false});
+  const count=pattern=>(value.match(pattern)??[]).length;
+  return Object.freeze({accepted:!!normalized,inputFormat:normalized?.inputFormat??"unrecognized",nonEmpty:value.length>0,byteCount:Buffer.byteLength(value),lineFeedCount:count(/\n/g),tabCount:count(/\t/g),equalsCount:count(/=/g),ampersandCount:count(/&/g),masked:MASK.test(value),startsWithReadKeyword:READ.test(value),readKeywordAnywhere:READ_ANY.test(value),forbiddenTokenDetected:FORBIDDEN.test(value),looksLikeUrlencodedForm:value.includes("=")&&value.includes("&"),looksLikeNameValueRow:/^sql\t/i.test(value),looksLikeLabelledSql:/^sql\s*(?::|=|\r?\n)/i.test(value),looksPercentEncoded:/%[0-9a-f]{2}/i.test(value),looksQuotedString:value.startsWith('"')&&value.endsWith('"'),looksLikeUrl:/^https?:\/\//i.test(value),looksLikeFiddlerInterface:/\b(?:HTTP Inspector|Agent Inspector|Live Traffic|Form-Data|Overview)\b/i.test(value),looksLikePowerShellPrompt:/\bPS\s+[^\r\n>]+>/i.test(value),containsNul:value.includes("\u0000"),looksLikeResultset:value.includes("\u0001"),looksLikeJson:/^[{[]/.test(value),looksLikeHtml:/^<!(?:doctype)|^<html\b/i.test(value),rawValueReturned:false});
 }

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { parseMatterNumber } from './matter-number';
 import { transaction, withDatabase, WorkDbError } from './work-db';
+import { SOURCE_PRIORITY_VERSION } from './source-policy';
 
 export type GroupReviewEvidence = {
   sheet: string;
@@ -110,8 +111,8 @@ export function importGroupReviewFindings(input: GroupReviewImport) {
     const policyHash = hash('group-candidate-review-v1:no-auto-create-with-incomplete-members');
     db.prepare(`INSERT OR IGNORE INTO policy_revision(id,revision_type,version,artifact_paths_json,content_hash,status,created_at) VALUES (?,'workflow','group-candidate-review-v1',? ,?,'active',?)`)
       .run(policyId, JSON.stringify(['docs/WORK_MANAGEMENT_ARCHITECTURE.md', 'docs/DECISION_FEEDBACK_DESIGN.md']), policyHash, timestamp);
-    db.prepare(`INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,'[]','{}','easy-pat-excel-registration-mail-v1',?,?,?)`)
-      .run(snapshotId, contextHash, JSON.stringify(context), timestamp);
+    db.prepare(`INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,'[]','{}',?,?,?,?)`)
+      .run(snapshotId, SOURCE_PRIORITY_VERSION, contextHash, JSON.stringify(context), timestamp);
 
     const result = { runId, sourceName, sourceHash, sourceLastModified, findingCount: findings.length, findings, createdAt: timestamp };
     db.prepare(`INSERT INTO decision_run(id,operation,agent_name,prompt_version,policy_revision_id,routing_snapshot_json,input_snapshot_id,status,started_at,completed_at,output_hash,result_json) VALUES (?,'group_candidate_review','deterministic_group_reviewer','group-candidate-review-v1',?,? ,?,'succeeded',?,?,?,?)`)

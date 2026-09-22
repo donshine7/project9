@@ -69,7 +69,7 @@ export function wikiIndex(query = '') {
     const list: Row[] = [];
     for (const [type, table] of Object.entries(tables)) {
       const nameColumn = type === 'matter' ? 'our_ref' : type === 'group' ? 'group_ref' : 'name';
-      for (const r of db.prepare(`SELECT id,${nameColumn} AS label,note,row_version FROM ${table} WHERE archived_at IS NULL AND ${nameColumn} LIKE ? ORDER BY ${nameColumn} LIMIT 200`).all(`%${query.slice(0, 100)}%`) as Row[]) {
+      for (const r of db.prepare(`SELECT id,${nameColumn} AS label,note,row_version FROM ${table} WHERE archived_at IS NULL AND ${nameColumn} LIKE ? ORDER BY ${nameColumn}`).all(`%${query.slice(0, 100)}%`) as Row[]) {
         const revision = get(db, 'SELECT version FROM entity_wiki_revision WHERE entity_type=? AND entity_id=? ORDER BY version DESC LIMIT 1', type, r.id);
         list.push({ ...r, type, version: revision?.version || 0, entryCount: activeEntries(db, type, r.id).length });
       }

@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, Database, FolderKanban, Mail, Sparkles } from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, ClipboardCheck, Database, FileArchive, FilePenLine, FolderKanban, Mail, Sparkles } from 'lucide-react';
 
 const launcherPath = String.raw`C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화\dashboard\대시보드 실행.cmd`;
 const operationalDbPath = String.raw`%LOCALAPPDATA%\SSPAT\work-management\sspat-work.db`;
@@ -34,7 +34,7 @@ export default function StartPage() {
           <div>
             <span className="kicker">WORKSPACE HOME</span>
             <h1>오늘의 업무를<br />안전하게 시작합니다.</h1>
-            <p>메일 자동분류와 한국특허 가출원 작성을 한 화면에서 선택하고, 각 작업의 현재 단계를 확인하세요.</p>
+            <p>메일 자동분류, 한국특허 가출원 작성과 중간사건 대응을 한 화면에서 선택하고, 각 작업의 현재 단계를 확인하세요.</p>
           </div>
           <div className="workspace-hero-mark" aria-hidden="true"><BriefcaseBusiness size={54} strokeWidth={1.4} /></div>
         </section>
@@ -61,9 +61,30 @@ export default function StartPage() {
             <p>프로젝트 초기화부터 원본 투입, HWPX 생성, 독립 검사와 시각 검수까지 진행 상태를 관리합니다.</p>
             <span className="workspace-card-link">작업 페이지 열기 <ArrowRight size={16} /></span>
           </a>
+          <a className="workspace-card workspace-card-download" href="/downloads">
+            <div className="workspace-card-icon"><FileArchive size={22} /></div>
+            <span className="workspace-card-eyebrow">NOTICE INTAKE</span>
+            <h2>통지서 자동 다운로드</h2>
+            <p>Outlook 감지, EasyPAT 첨부 ZIP 게시와 대응 프로젝트 생성 상태를 사건별로 확인합니다.</p>
+            <span className="workspace-card-link">다운로드 현황 열기 <ArrowRight size={16} /></span>
+          </a>
+          <a className="workspace-card workspace-card-response" href="/responses">
+            <div className="workspace-card-icon"><ClipboardCheck size={22} /></div>
+            <span className="workspace-card-eyebrow">OFFICE ACTION RESPONSE</span>
+            <h2>한국특허 중간사건 대응</h2>
+            <p>의견제출통지서와 거절결정서 프로젝트의 초기화, 분석, 전략, 초안, 검수와 제출 결과를 13단계로 관리합니다.</p>
+            <span className="workspace-card-link">대응 프로젝트 열기 <ArrowRight size={16} /></span>
+          </a>
+          <a className="workspace-card workspace-card-specification" href="/specifications">
+            <div className="workspace-card-icon"><FilePenLine size={22} /></div>
+            <span className="workspace-card-eyebrow">SPECIFICATION MAKING</span>
+            <h2>한국특허 명세서 작성</h2>
+            <p>새 사건 준비, 발명 창작 구체화, 특허 포인트·청구항 설계와 검수 상태를 8단계로 관리합니다.</p>
+            <span className="workspace-card-link">명세서 프로젝트 열기 <ArrowRight size={16} /></span>
+          </a>
         </section>
 
-        <div className="workspace-note"><Sparkles size={16} /><span>초기화는 고정된 로컬 PowerShell 스크립트만 호출하며, 경로 입력이나 기존 폴더 덮어쓰기는 허용하지 않습니다.</span></div>
+        <div className="workspace-note"><Sparkles size={16} /><span>초기화는 고정된 로컬 스크립트만 호출하며, 경로 입력이나 기존 폴더 덮어쓰기는 허용하지 않습니다.</span></div>
       </main>
     </div>
   );

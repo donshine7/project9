@@ -1,0 +1,24 @@
+version = "source-priority-v2"
+user_confirmation_mode = "protected_override"
+external_priority = ["easy_pat", "registration_mail", "excel", "mail_inference"]
+registration_mail_requirement = "completed_registration"
+conflict_mode = "review_without_overwrite"
+
+[easy_pat]
+server = "easypat"
+mode = "read_only"
+exact_full_reference_required = true
+exact_single_result_required = true
+store_internal_keys = false
+store_sql = false
+store_session_values = false
+automatic_fallback_as_easy_pat = false
+tools = [
+  "easypat_status",
+  "easypat_get_matter_summary",
+  "easypat_list_progress",
+  "easypat_list_documents",
+  "easypat_list_progress_documents",
+  "easypat_download_progress_document",
+  "easypat_extract_progress_document_pdf",
+]

@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseMatterNumber } from '../lib/matter-number';
+import { activateSourcePriorityPolicy, recordEasyPatVerification } from '../lib/easypat-verification';
+import { loadSourcePriorityPolicy, SOURCE_PRIORITY_VERSION } from '../lib/source-policy';
 import {
   archiveAction,
   archiveNote,
@@ -18,6 +20,7 @@ import {
   updateAction,
   updateNote,
   updateWorkItem,
+  withDatabase,
 } from '../lib/work-db';
 
 const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'sspat-phase1-'));
@@ -55,10 +58,107 @@ try {
   assert.deepEqual(parseMatterNumber('P252302-CN(PA)').suffixes, ['CN','PA']);
   assert.equal(parseMatterNumber('P261775-S1-CN').countryCode, 'CN');
 
-  assert.equal(databaseStatus().integrity, 'ok');
+  const initialDatabaseStatus = databaseStatus();
+  assert.equal(initialDatabaseStatus.integrity, 'ok');
+  assert.ok(initialDatabaseStatus.migrations.some((migration: any) => migration.version === '007_work_refresh_tracking.sql'));
+  withDatabase((db) => {
+    const runColumns = db.prepare('PRAGMA table_info(work_refresh_run)').all() as Array<{ name: string }>;
+    assert.ok(runColumns.some((column) => column.name === 'requested_at'));
+    assert.ok(runColumns.some((column) => column.name === 'completed_at'));
+    assert.ok(runColumns.some((column) => column.name === 'reviewed_mail_from'));
+    assert.ok(runColumns.some((column) => column.name === 'reviewed_mail_to'));
+
+    const syncColumns = db.prepare('PRAGMA table_info(sync_run)').all() as Array<{ name: string }>;
+    const decisionColumns = db.prepare('PRAGMA table_info(decision_run)').all() as Array<{ name: string }>;
+    assert.ok(syncColumns.some((column) => column.name === 'work_refresh_run_id'));
+    assert.ok(decisionColumns.some((column) => column.name === 'work_refresh_run_id'));
+
+    const createdAt = '2026-09-18T01:00:00.000Z';
+    db.prepare(`
+      INSERT INTO work_refresh_run(
+        id, request_channel, requested_by, requested_at, mail_window_from, mail_window_to,
+        target_mail_count, pending_mail_count, created_at, updated_at
+      ) VALUES (?, 'codex', '장진태', ?, ?, ?, 1, 1, ?, ?)
+    `).run('refresh-schema-test', createdAt, '2026-09-17T00:00:00.000Z', createdAt, createdAt, createdAt);
+    db.prepare(`
+      INSERT INTO work_refresh_stage(
+        id, work_refresh_run_id, stage_key, input_count, created_at, updated_at
+      ) VALUES (?, ?, 'collection', 1, ?, ?)
+    `).run('refresh-stage-test', 'refresh-schema-test', createdAt, createdAt);
+    db.prepare(`
+      INSERT INTO sync_run(
+        id, requested_from, requested_to, folder_scope_json, status,
+        processed_count, error_count, started_at, completed_at, work_refresh_run_id
+      ) VALUES (?, ?, ?, '[]', 'completed', 1, 0, ?, ?, ?)
+    `).run('refresh-sync-test', '2026-09-17T00:00:00.000Z', createdAt, createdAt, createdAt, 'refresh-schema-test');
+    db.prepare(`
+      INSERT INTO mail_item(
+        id, outlook_entry_id, folder_path, direction, subject, recipients_json,
+        mail_at, body_text, body_hash, imported_at
+      ) VALUES (?, ?, '받은 편지함', 'received', '업무 정리 추적 시험', '{}', ?, '시험 본문', ?, ?)
+    `).run('refresh-mail-test', 'refresh-mail-entry-test', '2026-09-17T01:00:00.000Z', 'a'.repeat(64), createdAt);
+    db.prepare(`
+      INSERT INTO work_refresh_mail(
+        work_refresh_run_id, mail_id, source_sync_run_id, review_status, reviewed_at, created_at, updated_at
+      ) VALUES (?, ?, ?, 'applied', ?, ?, ?)
+    `).run('refresh-schema-test', 'refresh-mail-test', 'refresh-sync-test', createdAt, createdAt, createdAt);
+    db.prepare(`
+      INSERT INTO work_refresh_result(
+        id, work_refresh_run_id, work_refresh_stage_id, subject_type, subject_key,
+        outcome, source_type, source_id, source_at, created_at
+      ) VALUES (?, ?, ?, 'mail', ?, 'applied', 'mail', ?, ?, ?)
+    `).run('refresh-result-test', 'refresh-schema-test', 'refresh-stage-test', 'refresh-mail-test', 'refresh-mail-test', '2026-09-17T01:00:00.000Z', createdAt);
+    const tracked = db.prepare(`
+      SELECT r.requested_at, m.mail_at AS source_at, s.completed_at
+      FROM work_refresh_run r
+      JOIN work_refresh_mail target ON target.work_refresh_run_id = r.id
+      JOIN mail_item m ON m.id = target.mail_id
+      JOIN sync_run s ON s.id = target.source_sync_run_id
+      WHERE r.id = ?
+    `).get('refresh-schema-test') as any;
+    assert.equal(tracked.requested_at, createdAt);
+    assert.equal(tracked.source_at, '2026-09-17T01:00:00.000Z');
+    assert.equal(tracked.completed_at, createdAt);
+    assert.throws(() => db.prepare(`
+      INSERT INTO work_refresh_mail(
+        work_refresh_run_id, mail_id, review_status, created_at, updated_at
+      ) VALUES (?, 'missing-mail', 'pending', ?, ?)
+    `).run('refresh-schema-test', createdAt, createdAt), /foreign key/i);
+    assert.throws(() => db.prepare(`
+      INSERT INTO work_refresh_stage(
+        id, work_refresh_run_id, stage_key, input_count, processed_count, created_at, updated_at
+      ) VALUES (?, ?, 'invalid-counts', 0, 1, ?, ?)
+    `).run('refresh-stage-invalid', 'refresh-schema-test', createdAt, createdAt), /constraint/i);
+    assert.throws(() => db.prepare(`
+      INSERT INTO work_refresh_run(
+        id, request_channel, requested_by, requested_at, mail_window_from, mail_window_to, created_at, updated_at
+      ) VALUES (?, 'codex', '장진태', ?, ?, ?, ?, ?)
+    `).run('refresh-invalid-window', createdAt, createdAt, '2026-09-17T00:00:00.000Z', createdAt, createdAt), /constraint/i);
+  });
+  const sourcePolicy = loadSourcePriorityPolicy();
+  assert.equal(sourcePolicy.version, SOURCE_PRIORITY_VERSION);
+  assert.deepEqual(sourcePolicy.externalPriority, ['easy_pat', 'registration_mail', 'excel', 'mail_inference']);
+  assert.equal(activateSourcePriorityPolicy().duplicate, false);
+  assert.equal(activateSourcePriorityPolicy().duplicate, true);
   const created = createMatter({ ourRef: 'P251556', workType: '출원', serviceType: '우선심사출원', stage: '출원', currentStatus: '사건 등록' });
   const matterId = String(created.matter.id);
   assert.equal(created.works.length, 1);
+
+  const easyPatEnvelope = {
+    tool: 'easypat_get_matter_summary',
+    arguments: { matterReference: 'P251556' },
+    structuredContent: { matterReference: 'P251556', rightType: '특허', applicationKind: '출원', applicationDivision: null, applicationDate: '2026-09-01', applicationNumber: '10-2026-0000001', titleKorean: '시험 발명', status: '출원' },
+    observedAt: '2026-09-18T09:00:00.000Z',
+  } as const;
+  const easyPatRun = recordEasyPatVerification(easyPatEnvelope);
+  assert.equal(easyPatRun.duplicate, false);
+  assert.equal(recordEasyPatVerification(easyPatEnvelope).duplicate, true);
+  const easyPatDetail = getMatter(matterId);
+  assert.equal(easyPatDetail.matter.sourceType, 'user_input');
+  assert.equal(easyPatDetail.easyPat.verified, true);
+  assert.equal(easyPatDetail.easyPat.lastObservedAt, '2026-09-18T09:00:00.000Z');
+  assert.ok(easyPatDetail.easyPat.observations.some((item: any) => item.fieldPath === 'easy_pat.summary.applicationNumber' && item.observedValue === '10-2026-0000001'));
+  assert.throws(() => recordEasyPatVerification({ ...easyPatEnvelope, structuredContent: { ...easyPatEnvelope.structuredContent, matterReference: 'P251557' } }), /요청과 결과/);
 
   const withWork = createWorkItem(matterId, { workType: '중간사건', serviceType: null, stage: '중간사건', currentStatus: '의견통지' });
   const secondWork = withWork.works.find((item: any) => item.workType === '중간사건');

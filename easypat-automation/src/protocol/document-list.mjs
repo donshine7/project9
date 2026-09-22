@@ -1,7 +1,7 @@
 import { normalizeExactMatterReference } from "./matter-reference.mjs";
 
-const ALLOWED_EXTENSIONS=new Set(["zip","jpg","jpeg","png","pdf","hwp","hwpx","doc","docx","xls","xlsx","ppt","pptx","txt"]);
-const UPLOAD_PATH=/^upload\/app_proc\/(\d{4})\/(\d{2})\/(\d{2})\/([A-Za-z0-9._-]+)$/;
+const ALLOWED_EXTENSIONS=new Set(["zip","jpg","jpeg","png","pdf","hwp","hwpx","doc","docx","xls","xlsx","ppt","pptx","txt","dwg","bib","fin","hlz"]);
+const UPLOAD_PATH=/^upload\/(?:app_proc|app)\/(\d{4})\/(\d{2})\/(\d{2})\/([A-Za-z0-9._-]+)$/;
 
 function safeText(value,maximum=512){
   if(value===null||value==="")return null;
@@ -23,12 +23,12 @@ function validatedRows(result){
   });
 }
 
-function validatedBoundRows(result,expectedMatterReference){
+function validatedBoundRows(result,expectedMatterReference,expectedTemplateId="matter-detail.documents.v1"){
   let matterReference;
   try{matterReference=normalizeExactMatterReference(expectedMatterReference);}
   catch{throw new Error("DOCUMENT_LIST_SOURCE_REJECTED");}
-  if(result?.matterReference!==matterReference||result.templateId!=="matter-detail.documents.v1"||
-     !Array.isArray(result.columns)||!Array.isArray(result.rows)||result.rows.length<1||result.rows.length>500){
+  if(result?.matterReference!==matterReference||result.templateId!==expectedTemplateId||
+     !Array.isArray(result.columns)||!Array.isArray(result.rows)||result.rows.length>500){
     throw new Error("DOCUMENT_LIST_SOURCE_REJECTED");
   }
   for(const required of ["DOC_NAME","REG_DATE","FILE_NAME","FILE_NAME_UPLOAD","FILE_SIZE"]){if(!result.columns.includes(required))throw new Error("DOCUMENT_LIST_SCHEMA_REJECTED");}
@@ -85,20 +85,52 @@ export function resolveDocumentDownload(result,{position,expectedFileName},{cont
   return Object.freeze({position,fileName:selected.fileName,uploadPath:selected.uploadPath,fileSizeBytes:selected.size,extension:selected.fileName.slice(selected.fileName.lastIndexOf(".")+1).toLowerCase()});
 }
 
-export function projectVerifiedDocumentList(result,{matterReference,responseBindingVerified}={}){
+export function projectVerifiedDocumentList(result,{matterReference,responseBindingVerified,templateId="matter-detail.documents.v1"}={}){
   if(responseBindingVerified!==true)throw new Error("DOCUMENT_LIST_MATTER_EVIDENCE_REJECTED");
-  const verified=validatedBoundRows(result,matterReference);
+  const verified=validatedBoundRows(result,matterReference,templateId);
   const items=verified.rows.map((row,index)=>Object.freeze({position:index+1,documentName:row.documentName,registeredAt:row.registeredAt,fileName:row.fileName,fileSizeBytes:row.size}));
   return Object.freeze({matterReference:verified.matterReference,count:items.length,items:Object.freeze(items)});
 }
 
+export function diagnoseVerifiedDocumentListEvidence(result,{matterReference,templateId="matter-detail.documents.v1"}={}){
+  let normalizedReference;
+  try{normalizedReference=normalizeExactMatterReference(matterReference);}
+  catch{throw new Error("DOCUMENT_LIST_SOURCE_REJECTED");}
+  if(result?.matterReference!==normalizedReference||result.templateId!==templateId||!Array.isArray(result.columns)||!Array.isArray(result.rows)||result.rows.length>500)throw new Error("DOCUMENT_LIST_SOURCE_REJECTED");
+  const required=["DOC_NAME","REG_DATE","FILE_NAME","FILE_NAME_UPLOAD","FILE_SIZE"],missingRequiredColumns=required.filter(column=>!result.columns.includes(column)).length;
+  const counts={invalidDocumentName:0,invalidRegisteredAt:0,invalidFileName:0,invalidUploadPath:0,emptyUploadPath:0,recognizedUploadPrefixWithInvalidShape:0,unsupportedFileType:0,extensionMismatch:0,invalidFileSize:0,overSizeLimit:0};
+  const unsupportedExtensions=new Map();
+  const invalidUploadDirectoryShapes=new Map();
+  for(const row of result.rows){
+    const documentName=row?.DOC_NAME,registeredAt=row?.REG_DATE,fileName=row?.FILE_NAME,uploadPath=row?.FILE_NAME_UPLOAD,sizeText=row?.FILE_SIZE;
+    if(documentName!==null&&documentName!==""&&(typeof documentName!=="string"||documentName.length>512||/[\p{Cc}\p{Cs}]/u.test(documentName)))counts.invalidDocumentName++;
+    if(registeredAt!==null&&registeredAt!==""&&(typeof registeredAt!=="string"||registeredAt.length>512||/[\p{Cc}\p{Cs}]/u.test(registeredAt)))counts.invalidRegisteredAt++;
+    const fileNameOk=typeof fileName==="string"&&fileName.length>0&&fileName.length<=260&&!/[\p{Cc}\p{Cs}\\/:*?"<>|]/u.test(fileName);if(!fileNameOk)counts.invalidFileName++;
+    const pathOk=typeof uploadPath==="string"&&uploadPath.length>0&&uploadPath.length<=1024&&UPLOAD_PATH.test(uploadPath);if(!pathOk){
+      counts.invalidUploadPath++;
+      if(uploadPath===null||uploadPath==="")counts.emptyUploadPath++;
+      else if(typeof uploadPath==="string"){
+        if(/^upload\/app_proc\//i.test(uploadPath))counts.recognizedUploadPrefixWithInvalidShape++;
+        const normalized=uploadPath.replaceAll("\\","/"),segments=normalized.split("/");segments.pop();
+        const shape=segments.slice(0,8).map(segment=>/^\d{4}$/.test(segment)?"YYYY":/^\d{2}$/.test(segment)?"NN":/^[a-f0-9]{12,}$/i.test(segment)?"<id>":/^[A-Za-z0-9._-]{1,32}$/.test(segment)?segment:"<segment>").join("/")||"<no-directory>";
+        invalidUploadDirectoryShapes.set(shape,(invalidUploadDirectoryShapes.get(shape)??0)+1);
+      }
+    }
+    const extension=fileNameOk&&fileName.includes(".")?fileName.slice(fileName.lastIndexOf(".")+1).toLowerCase():"",uploadLeaf=pathOk?uploadPath.slice(uploadPath.lastIndexOf("/")+1):"",uploadExtension=uploadLeaf.includes(".")?uploadLeaf.slice(uploadLeaf.lastIndexOf(".")+1).toLowerCase():"";
+    if(!ALLOWED_EXTENSIONS.has(extension)){counts.unsupportedFileType++;unsupportedExtensions.set(extension,(unsupportedExtensions.get(extension)??0)+1);}
+    if(fileNameOk&&pathOk&&extension!==uploadExtension)counts.extensionMismatch++;
+    const size=typeof sizeText==="string"&&/^\d+$/.test(sizeText)?Number(sizeText):NaN;if(!Number.isSafeInteger(size)||size<0)counts.invalidFileSize++;else if(size>64*1024*1024)counts.overSizeLimit++;
+  }
+  return Object.freeze({matterReference:normalizedReference,templateId,rowCount:result.rows.length,columnCount:result.columns.length,missingRequiredColumns,...counts,unsupportedExtensions:Object.freeze(Object.fromEntries([...unsupportedExtensions].sort(([left],[right])=>left.localeCompare(right)))),invalidUploadDirectoryShapes:Object.freeze(Object.fromEntries([...invalidUploadDirectoryShapes].sort(([left],[right])=>left.localeCompare(right)))),rawRowsReturned:false,fileNamesReturned:false,uploadPathsReturned:false,valuesReturned:false});
+}
+
 // This result is for the trusted downloader only. MCP tools must expose the
 // projected list above and must never return uploadPath.
-export function resolveVerifiedDocumentDownload(result,{matterReference,position,expectedFileName,responseBindingVerified}={}){
+export function resolveVerifiedDocumentDownload(result,{matterReference,position,expectedFileName,responseBindingVerified,templateId="matter-detail.documents.v1"}={}){
   if(responseBindingVerified!==true||!Number.isInteger(position)||position<1||typeof expectedFileName!=="string"||expectedFileName.length>260){
     throw new Error("DOCUMENT_DOWNLOAD_SELECTION_REJECTED");
   }
-  const verified=validatedBoundRows(result,matterReference);
+  const verified=validatedBoundRows(result,matterReference,templateId);
   if(position>verified.rows.length)throw new Error("DOCUMENT_DOWNLOAD_SELECTION_REJECTED");
   const selected=verified.rows[position-1];
   if(selected.fileName!==expectedFileName)throw new Error("DOCUMENT_DOWNLOAD_SELECTION_REJECTED");

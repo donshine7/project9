@@ -43,13 +43,13 @@
         <section class="dashboard-section overview" id="overview">
           <div class="section-heading hero-heading">
             <div><span class="kicker">CURRENT OPERATION</span><h2>메일 분류가 어떤 기준으로 움직이는지<br />한눈에 확인합니다.</h2><p>현재 적용된 Outlook 자동분류와 향후 업무 자동화 계획을 분리해 관리합니다.</p></div>
-            <div class="updated-chip"><span>✓</span> 최종 정책 반영</div>
+            <div class="updated-chip"><span>✓</span> 실행본 반영 · 신규 메일 관찰 대기</div>
           </div>
           <div class="metric-grid">
-            <article class="metric-card primary-metric"><div class="metric-icon">◉</div><span>Outlook (classic) 자동분류</span><strong>적용 완료</strong><p>사용자 PC의 classic 앱에서 VBA 모듈 실행</p></article>
+            <article class="metric-card primary-metric"><div class="metric-icon">◉</div><span>Outlook (classic) 자동분류</span><strong>실행본 반영</strong><p>최신 규칙 컴파일·저장·재시작 완료 · 신규 메일 종단간 재관찰 대기</p></article>
             <article class="metric-card"><span>우선순위 판정</span><strong>22<span>단계</span></strong><p>위에서 먼저 일치한 규칙 하나만 적용</p></article>
             <article class="metric-card"><span>분류 대상 폴더</span><strong>21<span>개</span></strong><p>기존 최상위 폴더만 사용</p></article>
-            <article class="metric-card"><span>최근 정책 보정</span><strong>3<span>종</span></strong><p>국내 OA·S 시리즈·DIV 분할출원 예외 반영</p></article>
+            <article class="metric-card"><span>실메일 분류 일치</span><strong>228<span>/241건</span></strong><p>2026.09.16~09.18 · 총 261건 관찰</p></article>
           </div>
           <div class="overview-grid">
             <article class="panel flow-panel">
@@ -110,11 +110,12 @@
           <div class="section-heading"><div><span class="kicker">SYSTEM MAP</span><h2>전체 구조</h2><p>현재 작동 중인 자동분류와 앞으로 연결할 업무 자동화 단계를 구분합니다.</p></div></div>
           <div class="architecture-grid">
             <article class="panel roadmap-panel"><div class="roadmap-line"></div><div class="roadmap-item active"><div class="roadmap-dot"></div><span>현재</span><div><strong>Outlook (classic) 자동분류</strong><p>사용자 PC의 classic 앱이 새 메일을 VBA 정책으로 기존 폴더에 이동</p></div></div><div class="roadmap-item next"><div class="roadmap-dot"></div><span>다음</span><div><strong>읽기 전용 운영 집계</strong><p>분류·미분류·오류 건수를 자동 반영</p></div></div><div class="roadmap-item"><div class="roadmap-dot"></div><span>계획</span><div><strong>결정적 업무 파이프라인</strong><p>사건번호·날짜·상태를 도구로 정규화</p></div></div><div class="roadmap-item"><div class="roadmap-dot"></div><span>계획</span><div><strong>검토·Wiki 투영</strong><p>고위험 항목 검토 후 업무 상태에 반영</p></div></div></article>
-            <article class="panel signal-panel"><div class="panel-heading"><div><span class="panel-label">OVERSEAS SIGNALS</span><h3>해외 사건 판단 기준</h3></div></div><ul><li><span></span>mslee@sspat.net · 이명삼 부장 · 해외관리팀</li><li><span></span>hjlee@sspat.net · 이효정 과장 · 해외관리팀</li><li><span></span>jtjang@sspat.net · 장진태 · 발신 시 해외 단서와 함께 판단</li><li><span></span>제목과 새로 작성된 본문이 모두 영문</li><li><span></span>P######-S#·P######-DIV#는 국내 특허 시리즈·분할출원 예외</li><li><span></span>[EASYPAT_S] + 업무구분 OA·의견/보정서 작성은 국내 OA 우선</li></ul><div class="signal-caution"><strong>중요</strong><p>jtjang@sspat.net가 수신자라는 이유만으로 해외 사건으로 판단하지 않습니다.</p></div></article>
+            <article class="panel signal-panel"><div class="panel-heading"><div><span class="panel-label">OVERSEAS SIGNALS</span><h3>해외 사건 판단 기준</h3></div></div><ul><li><span></span>mslee@sspat.net · 이명삼 부장 · 직접 발신은 항상 해외 폴더로 분류</li><li><span></span>hjlee@sspat.net · 이효정 과장 · 직접 발신은 단독 해외 신호, 수신·참조는 해외 단서와 함께 판단</li><li><span></span>jtjang@sspat.net · 장진태 · 발신 시 해외 단서와 함께 판단</li><li><span></span>P·T·D 6자리 번호 + 국가 접미사는 참여자와 무관한 해외 신호</li><li><span></span>제목과 새로 작성된 본문이 모두 영문</li><li><span></span>P######-S#·P######-DIV#는 국내 특허 시리즈·분할출원 예외</li><li><span></span>[EASYPAT_S] + 업무구분 OA·의견/보정서 작성은 국내 OA 우선</li></ul><div class="signal-caution"><strong>중요</strong><p>mslee@sspat.net 발신은 비해외 규칙보다 우선하며, jtjang@sspat.net가 수신자라는 이유만으로는 해외 사건으로 판단하지 않습니다.</p></div></article>
           </div>
         </section>
 
         <section class="dashboard-section" id="history">
+          <div class="history-list"><div class="history-item"><div class="history-index">16</div><time>2026.09.18</time><div class="history-copy"><strong>신규 수신 자동분류 관찰 및 최신 실행본 반영</strong><p>최근 261건을 대조해 NewMailEx 동작과 실행본 격차를 확인. HiworksRulesFinal을 최신 원본으로 교체해 컴파일·저장·재시작하고 저장된 OTM의 규칙·이벤트 연결을 재검증. 기존 메일 이동 없음; 신규 메일 관찰 대기</p></div><span class="history-status done">실행본 반영</span></div><div class="history-item"><div class="history-index">15</div><time>2026.09.17</time><div class="history-copy"><strong>국가 접미사 해외 특허 판정 보강</strong><p>P261937-US와 같이 전체 관리번호에 국가 접미사가 있으면 해외팀 참여자가 없어도 해외 특허로 판정. -RE·-S#·-DIV# 단독 접미사는 제외</p></div><span class="history-status done">소스 반영</span></div><div class="history-item"><div class="history-index">14</div><time>2026.09.17</time><div class="history-copy"><strong>이명삼 부장 발신 메일 해외 폴더 강제 분류</strong><p>mslee@sspat.net 직접 발신은 비해외 규칙보다 먼저 판정. 세부 해외 규칙을 적용하고 단서가 없으면 해외 기타로 폴백. 기존 메일 이동 없음</p></div><span class="history-status done">소스 반영</span></div><div class="history-item"><div class="history-index">13</div><time>2026.09.16</time><div class="history-copy"><strong>이효정 과장 발신 메일 해외 분류 보강</strong><p>hjlee@sspat.net 직접 발신을 단독 해외 신호로 인정. 해외 세부분류 후 단서 없는 “[업무전달] 부재중 전화 전달의 건”은 해외 기타로 폴백. 기존 메일 이동 없음</p></div><span class="history-status done">소스 반영</span></div></div>
           <div class="history-list"><div class="history-item"><div class="history-index">12</div><time>2026.09.15</time><div class="history-copy"><strong>의무연수 안내 누락 원인 및 실행 모듈 수정</strong><p>HiworksRulesFinal의 단일 주소 조건을 @kpaa.or.kr 도메인 조건으로 수정·컴파일·저장. edu@kpaa.or.kr 안내·재발송 회귀 검증 추가. 기존 메일 이동 없음</p></div><span class="history-status done">완료</span></div></div>
           <div class="section-heading"><div><span class="kicker">CHANGE LOG</span><h2>변경 이력</h2><p>앞으로 진행되는 작업도 이곳에 계속 반영합니다.</p></div></div>
           <div class="history-list"><div class="history-item"><div class="history-index">11</div><time>2026.09.14</time><div class="history-copy"><strong>김남명 변리사 부친상 경조사 분류 확인</strong><p>“(경조사) 회원 김남명 변리사의 부친 별세”를 일반 회원 경조사 제목 규칙의 회귀 사례로 추가</p></div><span class="history-status done">완료</span></div></div>

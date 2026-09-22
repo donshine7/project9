@@ -4,7 +4,9 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { hasExactMatterReference, parseMatterNumber } from './matter-number';
 import { ACTION_PRIORITIES, BUSINESS_TYPES, TEAM_MEMBERS, transaction, withDatabase, WorkDbError } from './work-db';
+import { recordWorkRefreshCoverageInDb, reconcileWorkRefreshStageInDb } from './work-refresh';
 import { decorateAuditFindings } from './audit-feedback';
+import { loadSourcePriorityPolicy, SOURCE_PRIORITY_VERSION } from './source-policy';
 
 type Row = Record<string, any>;
 type Evidence = { mailId: string; field: string; quote: string };
@@ -25,6 +27,7 @@ export function analysisPolicy() {
   const routing = readFileSync(path.join(root, 'config/llm-routing.toml'), 'utf8');
   const contract = readFileSync(path.join(root, 'config/analysis-contract.md'), 'utf8');
   const rules = readFileSync(path.join(root, 'docs/WORK_MANAGEMENT_ARCHITECTURE.md'), 'utf8');
+  const sourcePolicy = loadSourcePriorityPolicy();
   const routes: Record<string, Row> = {};
   for (const operation of Object.keys(operations)) {
     const section = routing.split(`[operations.${operation}]`);
@@ -42,7 +45,7 @@ export function analysisPolicy() {
     check(model === get(role, 'model') && effort === get(role, 'model_reasoning_effort') && agent === get(role, 'name'), '라우팅과 역할 설정이 다릅니다.', 500);
     routes[operation] = { model, effort, agent, configFile, role, promptVersion: `analysis-v1-${hash(role + contract).slice(0, 12)}` };
   }
-  return { routes, contract, routing, policyHash: hash({ routing, rules, contract, routes }) };
+  return { routes, contract, routing, sourcePolicy, policyHash: hash({ routing, rules, contract, routes, sourcePolicy: sourcePolicy.contentHash }) };
 }
 
 function mailHash(mail: Row) {
@@ -59,12 +62,18 @@ export function analysisMailIndex() {
   return withDatabase(db => db.prepare('SELECT id,subject,mail_at,direction,conversation_id FROM mail_item ORDER BY mail_at DESC').all());
 }
 
-export function prepareAnalysis(operation: string, mailIds: string[]) {
+export function prepareAnalysis(operation: string, mailIds: string[], tracking?: { workRefreshRunId: string; workRefreshStageId: string }) {
   check(Object.hasOwn(operations, operation), '알 수 없는 분석 동작');
   check(operation !== 'wiki_revision', 'Wiki 게시·개정 실행은 4단계에서 연결합니다. 현재는 분석 근거를 먼저 확정하세요.');
   check(Array.isArray(mailIds) && mailIds.length > 0 && mailIds.length <= 200 && new Set(mailIds).size === mailIds.length, '분석 대상은 중복 없는 1~200개 메일이어야 합니다.');
   const policy = analysisPolicy();
   return withDatabase(db => transaction(db, () => {
+    if (tracking) {
+      const stage = row(db, 'SELECT * FROM work_refresh_stage WHERE id=?', tracking.workRefreshStageId);
+      check(stage && stage.work_refresh_run_id === tracking.workRefreshRunId && stage.stage_key === operation && stage.status === 'running', '업무 정리 실행 단계가 분석 동작과 일치하지 않습니다.', 409);
+      const targetCount = (db.prepare(`SELECT COUNT(*) AS n FROM work_refresh_mail WHERE work_refresh_run_id=? AND mail_id IN (${mailIds.map(() => '?').join(',')})`).get(tracking.workRefreshRunId, ...mailIds) as Row).n;
+      check(Number(targetCount) === mailIds.length, '업무 정리 대상이 아닌 메일이 포함되었습니다.', 409);
+    }
     const mails = mailIds.map(id => sourceMail(db, id));
     const entities: Record<string, Row> = {};
     for (const [type, table] of Object.entries(tables)) {
@@ -74,6 +83,7 @@ export function prepareAnalysis(operation: string, mailIds: string[]) {
     const works = db.prepare('SELECT * FROM work_item WHERE archived_at IS NULL').all();
     const actions = db.prepare('SELECT * FROM action_item WHERE archived_at IS NULL').all();
     const assignments = db.prepare('SELECT * FROM assignment WHERE archived_at IS NULL').all();
+    const sourceObservations = db.prepare("SELECT * FROM source_observation WHERE source_type='easy_pat' ORDER BY observed_at,id").all();
     const links = (db.prepare('SELECT * FROM mail_matter_link').all() as Row[]).filter(x => mailIds.includes(x.mail_id));
     const candidates = (db.prepare('SELECT * FROM analysis_candidate').all() as Row[]).filter(x => {
       const c = JSON.parse(x.payload_json) as Candidate;
@@ -81,12 +91,12 @@ export function prepareAnalysis(operation: string, mailIds: string[]) {
     });
     const events = candidates.filter(c => c.applied_event_id).map(c => row(db, 'SELECT * FROM event WHERE id=?', c.applied_event_id));
     const mailRegistry = db.prepare('SELECT id FROM mail_item ORDER BY id').all();
-    const context = { mails: mails.map(m => ({ id: m.id, hash: mailHash(m) })), mailRegistry, entities, works, actions, assignments, links, candidates, events };
+    const context = { mails: mails.map(m => ({ id: m.id, hash: mailHash(m) })), mailRegistry, entities, works, actions, assignments, sourceObservations, links, candidates, events };
     const snapshotId = randomUUID(), runId = randomUUID(), revisionId = `analysis-${policy.policyHash}`;
     const route = policy.routes[operation];
-    db.prepare(`INSERT OR IGNORE INTO policy_revision(id,revision_type,version,artifact_paths_json,content_hash,status,created_at) VALUES (?,'workflow',?,? ,?,'active',?)`).run(revisionId, policy.policyHash, JSON.stringify(['config/llm-routing.toml', route.configFile, 'config/analysis-contract.md', 'docs/WORK_MANAGEMENT_ARCHITECTURE.md']), policy.policyHash, stamp());
-    db.prepare(`INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,?,?,'user-registration-excel-mail-v1',?,?,?)`).run(snapshotId, JSON.stringify(context.mails), JSON.stringify(entities), hash(context), JSON.stringify(context), stamp());
-    db.prepare(`INSERT INTO decision_run(id,operation,agent_name,prompt_version,policy_revision_id,routing_snapshot_json,input_snapshot_id,status,started_at) VALUES (?,?,?,?,?,?,?,'prepared',?)`).run(runId, operation, route.agent, route.promptVersion, revisionId, JSON.stringify({ ...route, contract: policy.contract, policyHash: policy.policyHash }), snapshotId, stamp());
+    db.prepare(`INSERT OR IGNORE INTO policy_revision(id,revision_type,version,artifact_paths_json,content_hash,status,created_at) VALUES (?,'workflow',?,? ,?,'active',?)`).run(revisionId, policy.policyHash, JSON.stringify(['config/llm-routing.toml', route.configFile, 'config/analysis-contract.md', 'config/source-priority.toml', 'docs/WORK_MANAGEMENT_ARCHITECTURE.md']), policy.policyHash, stamp());
+    db.prepare(`INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,?,?,?,?,?,?)`).run(snapshotId, JSON.stringify(context.mails), JSON.stringify(entities), SOURCE_PRIORITY_VERSION, hash(context), JSON.stringify(context), stamp());
+    db.prepare(`INSERT INTO decision_run(id,operation,agent_name,prompt_version,policy_revision_id,routing_snapshot_json,input_snapshot_id,status,started_at,work_refresh_run_id,work_refresh_stage_id) VALUES (?,?,?,?,?,?,?,'prepared',?,?,?)`).run(runId, operation, route.agent, route.promptVersion, revisionId, JSON.stringify({ ...route, contract: policy.contract, policyHash: policy.policyHash }), snapshotId, stamp(), tracking?.workRefreshRunId ?? null, tracking?.workRefreshStageId ?? null);
     return { runId, operation, route: { agent: route.agent, model: route.model, effort: route.effort }, mailCount: mails.length };
   }));
 }
@@ -114,7 +124,13 @@ export function bindAnalysis(runId: string, execution: { agentId: string; model:
 }
 export function failAnalysis(runId: string, code: string) {
   text(code, 100);
-  return withDatabase(db => { const changed = db.prepare(`UPDATE decision_run SET status='failed',error_code=?,completed_at=? WHERE id=? AND status IN ('prepared','started')`).run(code, stamp(), runId); check(changed.changes === 1, '실행 상태 충돌', 409); return { runId, status: 'failed' }; });
+  return withDatabase(db => transaction(db, () => {
+    const current = row(db, 'SELECT work_refresh_stage_id FROM decision_run WHERE id=?', runId);
+    const changed = db.prepare(`UPDATE decision_run SET status='failed',error_code=?,completed_at=? WHERE id=? AND status IN ('prepared','started')`).run(code, stamp(), runId);
+    check(changed.changes === 1, '실행 상태 충돌', 409);
+    if (current?.work_refresh_stage_id) reconcileWorkRefreshStageInDb(db, current.work_refresh_stage_id);
+    return { runId, status: 'failed' };
+  }));
 }
 
 function values(c: Candidate): Row { return Object.fromEntries(Object.entries(c.fields).map(([key, field]) => [key, field.value])); }
@@ -216,6 +232,8 @@ export function ingestAnalysis(result: Result) {
       db.prepare(`INSERT INTO decision_evidence(id,decision_item_id,source_type,source_id,locator_json,excerpt,excerpt_hash,supports) VALUES (?,?,'mail',?,'{"field":"subject"}',?,?,'context')`).run(randomUUID(), decisionId, c.mailId, excerpt, hash(excerpt));
     }
     db.prepare(`UPDATE decision_run SET status='succeeded',completed_at=?,output_hash=?,result_json=? WHERE id=?`).run(stamp(), outputHash, JSON.stringify(result), result.runId);
+    recordWorkRefreshCoverageInDb(db, run, result.coverage);
+    if (run.work_refresh_stage_id) reconcileWorkRefreshStageInDb(db, run.work_refresh_stage_id);
     return { runId: result.runId, count: result.candidates.length, duplicate: false };
   }));
 }
@@ -235,7 +253,7 @@ export function analysisStatus() {
       });
       return result;
     })(),
-    runs: (db.prepare('SELECT id,operation,agent_name,model,reasoning_effort,prompt_version,status,execution_ref,started_at,completed_at,error_code,result_json,retry_of FROM decision_run ORDER BY started_at DESC LIMIT 100').all() as Row[]).map((r): Row => ({ ...r, result_json: undefined, coverage: r.result_json ? JSON.parse(r.result_json).coverage || [] : [] })),
+    runs: (db.prepare('SELECT id,operation,agent_name,model,reasoning_effort,prompt_version,status,execution_ref,started_at,completed_at,error_code,result_json,retry_of,work_refresh_run_id,work_refresh_stage_id FROM decision_run ORDER BY started_at DESC LIMIT 100').all() as Row[]).map((r): Row => ({ ...r, result_json: undefined, coverage: r.result_json ? JSON.parse(r.result_json).coverage || [] : [] })),
     candidates: (db.prepare('SELECT c.*,r.model,r.reasoning_effort,r.prompt_version FROM analysis_candidate c JOIN decision_run r ON r.id=c.run_id ORDER BY c.created_at DESC LIMIT 1000').all() as Row[]).map((c): Row => {
       const payload = JSON.parse(c.payload_json), proposed = values(payload);
       let existingPartyOptions: Row[] = [];
@@ -321,14 +339,25 @@ export function reviewCandidate(id: string, input: { action: string; expectedVer
     validateValues(edited);
     const target = entity(db, c.entityType, c.entityId);
     if (input.action !== 'reject') {
-      if (context.mailRegistry) check(JSON.stringify(context.mailRegistry) === JSON.stringify(db.prepare('SELECT id FROM mail_item ORDER BY id').all()), '분석 후 새 메일이 들어왔습니다. 최신 근거로 재분석하세요.', 409);
+      const verifications = db.prepare(`SELECT * FROM analysis_candidate WHERE kind='risk' AND entity_id=? ORDER BY created_at DESC`).all(id) as Row[];
+      if (context.mailRegistry) {
+        const currentRegistry = db.prepare('SELECT id FROM mail_item ORDER BY id').all();
+        const originalSnapshotIsCurrent = JSON.stringify(context.mailRegistry) === JSON.stringify(currentRegistry);
+        const freshlyConfirmedNoAction = c.kind === 'action' && v.required === false && verifications.some(verification => {
+          if (values(JSON.parse(verification.payload_json)).verdict !== 'confirmed') return false;
+          const verified = runContext(db, verification.run_id);
+          return verified.run.status === 'succeeded'
+            && JSON.stringify(verified.context.mailRegistry) === JSON.stringify(currentRegistry)
+            && verified.context.candidates.some((prior: Row) => prior.id === id && prior.payload_json === original.payload_json);
+        });
+        check(originalSnapshotIsCurrent || freshlyConfirmedNoAction, '분석 후 새 메일이 들어왔습니다. 최신 근거로 재분석하세요.', 409);
+      }
       const old = context.entities[`${c.entityType}:${c.entityId}`];
       if (old) check(old.row_version === target.row_version, '사용자 확정값이 변경되었습니다. 재분석하세요.', 409);
       if (c.kind === 'link') {
         const currentMatter = row(db, 'SELECT * FROM matter WHERE our_ref=? AND archived_at IS NULL', v.matterRef);
         check(currentMatter && context.entities[`matter:${currentMatter.id}`]?.row_version === currentMatter.row_version, '연결할 사건이 변경되었습니다. 재분석하세요.', 409);
       }
-      const verifications = db.prepare(`SELECT * FROM analysis_candidate WHERE kind='risk' AND entity_id=? ORDER BY created_at DESC`).all(id) as Row[];
       if (directRelationshipFeedback) {
         check(verifications.length > 0, '독립 검증이 없는 관계 후보입니다. 먼저 고위험 검증을 실행하세요.', 409);
         check(verifications.every(r => values(JSON.parse(r.payload_json)).verdict !== 'rejected'), '독립 검증에서 반려된 후보입니다. 새 근거로 재분석하세요.', 409);
@@ -377,7 +406,10 @@ export function reviewCandidate(id: string, input: { action: string; expectedVer
           if (existing) {
             check(existing.name === v.name, '같은 이메일에 다른 이름이 있습니다. 동명이인·공용 주소를 확인하세요.', 409);
             const previous = context.entities[`${v.partyType}:${existing.id}`];
-            check(directRelationshipFeedback && selected ? true : previous ? previous.row_version === existing.row_version : existing.source_type === 'user_input' && existing.source_id && row(db, 'SELECT run_id FROM analysis_candidate WHERE id=?', existing.source_id)?.run_id === original.run_id, '관계 대상이 분석 후 생성·수정되었습니다. 재분석하세요.', 409);
+            const exactConfirmedIdentity = existing.user_confirmed === 1
+              && existing.name === v.name
+              && (v.partyType === 'organization' ? existing.business_type === v.businessType : existing.email === v.email);
+            check(directRelationshipFeedback && selected ? true : previous ? previous.row_version === existing.row_version || exactConfirmedIdentity : existing.source_type === 'user_input' && existing.source_id && row(db, 'SELECT run_id FROM analysis_candidate WHERE id=?', existing.source_id)?.run_id === original.run_id, '관계 대상이 분석 후 생성·수정되었습니다. 재분석하세요.', 409);
           } else if (v.partyType === 'person') {
             check(!row(db, 'SELECT id FROM person WHERE name=? AND archived_at IS NULL', v.name), '동명이인 또는 이메일 변경 가능성이 있습니다. 별도 확인하세요.', 409);
           }

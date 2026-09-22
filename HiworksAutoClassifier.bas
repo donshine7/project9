@@ -188,6 +188,15 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
     compactSubject = RemoveWhitespace(subjectText)
     newBody = ExtractNewBody(NzText(mail.Body))
 
+    ' A message sent directly by the overseas-management manager always belongs
+    ' to one of the overseas folders. This sender policy is evaluated before
+    ' condolence, deadline, project, registration and domestic-template rules.
+    ' The content still selects a more specific overseas folder when possible.
+    If senderAddress = "mslee@sspat.net" Then
+        GetDestinationName = GetDirectOverseasDestination(subjectText, newBody)
+        Exit Function
+    End If
+
     ' 1-3. Fixed messages sent from the office automation address.
     If senderAddress = "sspat99@sspat.net" Then
         If ContainsText(subjectText, "해외출원안내") Then
@@ -366,12 +375,51 @@ Private Function GetDestinationName(ByVal mail As Outlook.MailItem) As String
     ' No catch-all folder: unclassified mail remains in Inbox.
 End Function
 
+Private Function GetDirectOverseasDestination( _
+    ByVal subjectText As String, _
+    ByVal newBody As String) As String
+
+    If ContainsText(subjectText, "중국") And ContainsText(subjectText, "가출원") Then
+        GetDirectOverseasDestination = "중국 가출원"
+    ElseIf HasMatterCode(subjectText, "PI") Then
+        GetDirectOverseasDestination = "해외 특허"
+    ElseIf IsOverseasFinance(subjectText, newBody) Then
+        GetDirectOverseasDestination = "해외 견적/청구/정산"
+    ElseIf IsOverseasDesign(subjectText, newBody) Then
+        GetDirectOverseasDestination = "해외 디자인"
+    ElseIf IsOverseasTrademark(subjectText, newBody) Then
+        GetDirectOverseasDestination = "해외 상표"
+    ElseIf IsOverseasPatent(subjectText, newBody) Then
+        GetDirectOverseasDestination = "해외 특허"
+    Else
+        GetDirectOverseasDestination = "해외 기타"
+    End If
+End Function
+
 Private Function IsOverseasMail( _
     ByVal mail As Outlook.MailItem, _
     ByVal subjectText As String, _
     ByVal newBody As String) As Boolean
 
     Dim hasOverseasTeam As Boolean
+
+    ' A direct message from either confirmed overseas-management sender is an
+    ' overseas signal by itself. mslee@sspat.net is additionally handled at the
+    ' top of GetDestinationName so no non-overseas rule can intercept it.
+    If GetSenderSmtpAddress(mail) = "mslee@sspat.net" _
+        Or GetSenderSmtpAddress(mail) = "hjlee@sspat.net" Then
+        IsOverseasMail = True
+        Exit Function
+    End If
+
+    ' A full office-management reference with an overseas country suffix is
+    ' sufficient by itself. It must not depend on an overseas-team participant.
+    ' Domestic relation suffixes such as -RE, -S1 and -DIV1 are excluded unless
+    ' a separate country suffix follows them.
+    If HasOverseasMatterReference(subjectText) Then
+        IsOverseasMail = True
+        Exit Function
+    End If
 
     ' The mailbox owner's presence as a recipient is deliberately ignored because
     ' nearly every incoming message is addressed to jtjang@sspat.net.
@@ -414,9 +462,20 @@ Private Function HasForeignClue(ByVal subjectText As String, ByVal newBody As St
         Exit Function
     End If
 
-    ' Examples: P211758-PCT-EP, T261420-UA, D231154-JP.
-    HasForeignClue = RegexTest(subjectText, _
-        "(^|[^A-Z0-9])[PTD][0-9]{6}-(PCT-)?[A-Z]{2}([^A-Z]|$)")
+    HasForeignClue = HasOverseasMatterReference(subjectText)
+End Function
+
+Private Function HasOverseasMatterReference(ByVal sourceText As String) As Boolean
+    ' Examples: P261937-US, P211758-PCT-EP, P241750-RE-US,
+    ' P262000-S1-JP, T261420-UA, D231154-JP and P261931-PCT.
+    If RegexTest(sourceText, _
+        "(^|[^A-Z0-9])[PTD][0-9]{6}(-(S[0-9]+|DIV[0-9]+|RE))?-(PCT-)?(?!RE([^A-Z]|$))[A-Z]{2}([^A-Z]|$)") Then
+        HasOverseasMatterReference = True
+        Exit Function
+    End If
+
+    HasOverseasMatterReference = RegexTest(sourceText, _
+        "(^|[^A-Z0-9])[PTD][0-9]{6}(-(S[0-9]+|DIV[0-9]+|RE))?-PCT([^A-Z]|$)")
 End Function
 
 Private Function IsOverseasFinance(ByVal subjectText As String, ByVal newBody As String) As Boolean

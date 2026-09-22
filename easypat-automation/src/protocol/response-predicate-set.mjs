@@ -19,7 +19,7 @@ export function compileResponsePredicateSet(statement,verification){
 }
 
 export function verifyResponsePredicateSet(result,binding){
-  if(!result||!Array.isArray(result.columns)||!Array.isArray(result.rows)||result.rows.length<1||binding?.mode!=="statement-literals-all-rows"||!Array.isArray(binding.bindings)||!binding.bindings.length)throw new Error("response predicate-set mismatch");
+  if(!result||!Array.isArray(result.columns)||!Array.isArray(result.rows)||binding?.mode!=="statement-literals-all-rows"||!Array.isArray(binding.bindings)||!binding.bindings.length)throw new Error("response predicate-set mismatch");
   const verifiedColumns=[];
   for(const item of binding.bindings){
     const matches=result.columns.filter(column=>column.toLowerCase()===item.responseColumn.toLowerCase());

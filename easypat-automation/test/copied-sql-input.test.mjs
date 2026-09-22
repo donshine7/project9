@@ -10,7 +10,19 @@ test("accepts raw SQL, a Fiddler name/value row, and an exact URL-encoded SELECT
   assert.equal(normalizeCopiedSqlInput('"SELECT * FROM safe"').inputFormat,"quoted-json-string");
   assert.equal(normalizeCopiedSqlInput("sql: SELECT * FROM safe").inputFormat,"labelled-sql-value");
   assert.equal(normalizeCopiedSqlInput("SELECT%20*%20FROM%20safe").inputFormat,"percent-encoded-sql-value");
-  assert.equal(normalizeCopiedSqlInput("Value copied by inspector: SELECT * FROM safe").inputFormat,"prefixed-fiddler-cell-text");
+});
+
+test("rejects shell snippets and unknown prefixes instead of extracting a read keyword",()=>{
+  for(const value of ["SELECT|WITH)\\s'", "$v.TrimStart() -match '^(SELECT|WITH)\\s'", "Value copied by inspector: SELECT * FROM safe", "echo SELECT * FROM safe", '"SELECT|WITH)\\\\s\'"', "sql: SELECT|WITH)\\s'", "command=SELECT&sql=SELECT%7CWITH%29%5Cs%27"]){
+    assert.throws(()=>normalizeCopiedSqlInput(value));
+    assert.equal(diagnoseCopiedSqlInput(value).accepted,false);
+  }
+});
+
+test("diagnostic reports only safe clipboard shape counters and UI classifications",()=>{
+  const value=diagnoseCopiedSqlInput("Overview\nHTTP Inspector\nForm-Data");
+  assert.equal(value.accepted,false);assert.equal(value.looksLikeFiddlerInterface,true);assert.equal(value.lineFeedCount,2);assert.equal(value.rawValueReturned,false);
+  assert.doesNotMatch(JSON.stringify(value),/Overview|Inspector|Form-Data/);
 });
 
 test("rejects responses, writes, masks, credential-bearing forms, and non-SQL clipboard text",()=>{

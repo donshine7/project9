@@ -7,3 +7,17 @@
 .phase4-test/
 .client-test/
 .registration-test/
+.analysis-ingest/
+.assignee-confirmation-test/
+.capture-scoped-facts/
+.clarification-inspect/
+.clarification-operation/
+.notice-downloads-test/
+.notice-ledger-test/
+.notice-mail-test/
+.notice-responses-test/
+.operational-refresh/
+.relationship-deferral-test/
+.target-wiki/
+.work-refresh-test/
+.specifications-test/

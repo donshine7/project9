@@ -1,10 +1,11 @@
-const REFERENCE = /^(PPT|PT|P|T)(\d{3,12})((?:-[A-Z0-9]+(?:\([A-Z0-9]+\))?)*)$/;
+const REFERENCE = /^(PPT|PT|P|T|D)(\d{3,12})((?:-[A-Z0-9]+(?:\([A-Z0-9]+\))?)*)$/;
 
 const FAMILIES = Object.freeze({
   T: "trademark",
   P: "patent",
   PT: "sangsang-provisional",
   PPT: "sangsang-plus-provisional",
+  D: "design",
 });
 
 // This parser is intentionally narrower than the legacy UI helper. It is used

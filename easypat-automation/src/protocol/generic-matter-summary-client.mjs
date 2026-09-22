@@ -37,7 +37,8 @@ export function createGenericMatterSummaryClient({
     !sameMembers(fixedRegistry?.authorizedNonBaselineMatterReferences, fixedRegistry?.validatedNonBaselineMatterReferences) ||
     constraint?.enabled !== true ||
     !sameMembers(constraint?.enabledTemplateIds, TEMPLATE_IDS) ||
-    constraint?.exactSearchCountRequired !== 1 ||
+    constraint?.maximumSearchCandidateCount !== 500 ||
+    constraint?.exactMatterReferenceMatchCountRequired !== 1 ||
     constraint?.exactMatterReferenceMatchRequired !== true ||
     constraint?.verifiedInternalIdentityRequired !== true ||
     constraint?.callerSuppliedSqlAllowed !== false ||

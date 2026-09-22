@@ -34,7 +34,9 @@
     "list-documents",
     "download-document"
   ],
-  "plannedOperationsNotYetEnabled": [],
+  "plannedOperationsNotYetEnabled": [
+    "upload-domestic-report"
+  ],
   "blockedObservedOperations": [
     {
       "operation": "open-matter-detail-via-ui",
@@ -58,34 +60,50 @@
       "uiNavigationReplayAllowed": false,
       "enabledTemplateIds": ["matter-detail.documents.v1"],
       "boundMatterReferences": ["P261793"],
-      "exactResponseMatterMatchRequired": true
+      "exactResponseMatterMatchRequired": true,
+      "matterBindingVerified": false,
+      "blockedReason": "captured sessions 231-245-247 use a shared contract group not derived from the verified matter identity"
     }
   },
   "genericMatterSummaryConstraints": {
     "enabled": true,
-    "mcpExposureEnabled": false,
+    "mcpExposureEnabled": true,
     "enabledTemplateIds": [
       "matter-search.exact-count.v1",
       "matter-search.exact-result.v1",
       "matter-detail.main-record.v1"
     ],
-    "acceptedMatterReferenceFamilies": ["P", "PT", "PPT", "T"],
+    "acceptedMatterReferenceFamilies": ["P", "PT", "PPT", "T", "D"],
     "fullSuffixIdentityRequired": true,
-    "exactSearchCountRequired": 1,
+    "maximumSearchCandidateCount": 500,
+    "exactMatterReferenceMatchCountRequired": 1,
     "exactMatterReferenceMatchRequired": true,
     "verifiedInternalIdentityRequired": true,
     "callerSuppliedSqlAllowed": false,
     "automaticRetryEnabled": false
   },
+  "genericApplicationNumberSearchConstraints": {
+    "enabled": true,
+    "mcpExposureEnabled": true,
+    "sourceTemplateIds": [
+      "matter-search.exact-count.v1",
+      "matter-search.exact-result.v1"
+    ],
+    "maximumSearchCandidateCount": 500,
+    "exactApplicationNumberMatchRequired": true,
+    "callerSuppliedSqlAllowed": false,
+    "automaticRetryEnabled": false
+  },
   "genericProgressConstraints": {
-    "enabled": false,
-    "mcpExposureEnabled": false,
+    "enabled": true,
+    "mcpExposureEnabled": true,
     "enabledTemplateIds": [
       "matter-search.exact-count.v1",
       "matter-search.exact-result.v1",
       "matter-detail.progress-records.v1"
     ],
-    "exactSearchCountRequired": 1,
+    "maximumSearchCandidateCount": 500,
+    "exactMatterReferenceMatchCountRequired": 1,
     "exactMatterReferenceMatchRequired": true,
     "verifiedInternalIdentityRequired": true,
     "allProgressRowsIdentityMatchRequired": true,
@@ -93,14 +111,15 @@
     "automaticRetryEnabled": false
   },
   "genericDocumentConstraints": {
-    "enabled": false,
-    "mcpExposureEnabled": false,
+    "enabled": true,
+    "mcpExposureEnabled": true,
     "enabledTemplateIds": [
       "matter-search.exact-count.v1",
       "matter-search.exact-result.v1",
-      "matter-detail.documents.v1"
+      "matter-detail.documents.matter-candidate.v1"
     ],
-    "exactSearchCountRequired": 1,
+    "maximumSearchCandidateCount": 500,
+    "exactMatterReferenceMatchCountRequired": 1,
     "exactMatterReferenceMatchRequired": true,
     "verifiedInternalIdentityRequired": true,
     "documentGroupDerivedFromVerifiedIdentityRequired": true,
@@ -109,20 +128,87 @@
     "callerSuppliedSqlAllowed": false,
     "automaticRetryEnabled": false
   },
+  "genericProgressDocumentConstraints": {
+    "enabled": true,
+    "mcpExposureEnabled": true,
+    "enabledTemplateIds": [
+      "matter-search.exact-count.v1",
+      "matter-search.exact-result.v1",
+      "matter-detail.progress-records.v1",
+      "matter-detail.document-group-intermediate.v2",
+      "matter-detail.progress-documents.v1"
+    ],
+    "maximumSearchCandidateCount": 500,
+    "exactMatterReferenceMatchCountRequired": 1,
+    "exactMatterReferenceMatchRequired": true,
+    "verifiedInternalIdentityRequired": true,
+    "exactProgressDocumentMatchRequired": true,
+    "intermediateIdentityBindingRequired": true,
+    "allDocumentRowsPredicateSetMatchRequired": true,
+    "callerSuppliedGroupKeyAllowed": false,
+    "callerSuppliedSqlAllowed": false,
+    "automaticRetryEnabled": false,
+    "requiredDistinctMatterValidations": 2,
+    "validatedMatterReferences": ["PT261268", "P261793"]
+  },
+  "genericNoticeAttachmentConstraints": {
+    "enabled": true,
+    "mcpExposureEnabled": true,
+    "sourceTemplateIds": [
+      "matter-search.exact-count.v1",
+      "matter-search.exact-result.v1",
+      "matter-detail.progress-records.v1",
+      "matter-detail.related-counts.v1"
+    ],
+    "derivedTemplateId": "matter-detail.attachments.all.v1",
+    "maximumSearchCandidateCount": 500,
+    "exactMatterReferenceMatchCountRequired": 1,
+    "exactProgressRowMatchRequired": 1,
+    "aggregateCountMatchRequired": true,
+    "contiguousNoticePackageRequired": true,
+    "callerSuppliedSqlAllowed": false,
+    "callerSuppliedInternalIdentityAllowed": false,
+    "automaticRetryEnabled": false,
+    "requiredDistinctMatterValidations": 5,
+    "validatedMatterReferences": ["P261048", "P261315", "P261487", "P261489", "P261610"]
+  },
   "genericDownloadConstraints": {
-    "enabled": false,
-    "mcpExposureEnabled": false,
-    "sourceTemplateId": "matter-detail.documents.v1",
-    "selectionInput": ["matterReference", "position", "expectedFileName"],
+    "enabled": true,
+    "mcpExposureEnabled": true,
+    "sourceTemplateId": "matter-detail.progress-documents.v1",
+    "selectionInput": ["matterReference", "progressDocument", "position", "expectedFileName"],
     "freshVerifiedDocumentListRequired": true,
     "sameOriginOnly": true,
     "maximumBytes": 67108864,
     "overwriteAllowed": false,
     "automaticRetryEnabled": false,
-    "callerSuppliedUploadPathAllowed": false
+    "callerSuppliedUploadPathAllowed": false,
+    "authorizedValidationMatterReferences": [
+      "PT261268",
+      "P261793",
+      "P261048",
+      "P261315",
+      "P261487",
+      "P261489",
+      "P261610"
+    ]
+  },
+  "noticePackageDownloadConstraints": {
+    "enabled": true,
+    "sourceTemplateId": "matter-detail.attachments.all.v1",
+    "freshVerifiedListRequired": true,
+    "sameOriginOnly": true,
+    "maximumBytes": 67108864,
+    "maximumPackageBytes": 536870912,
+    "allowMissingContentTypeForVerifiedAttachment": true,
+    "overwriteAllowed": false,
+    "automaticRetryEnabled": false,
+    "callerSuppliedUploadPathAllowed": false,
+    "destinationRoot": "C:\\Users\\donsh\\OneDrive\\Desktop\\ONEDRIVE\\Desktop\\[상상] 업무분류\\0-0. intake"
   },
   "documentDownloadConstraints": {
-    "enabled": true,
+    "enabled": false,
+    "matterBindingVerified": false,
     "matterReference": "P261793",
     "sourceTemplateId": "matter-detail.documents.v1",
     "sameOriginOnly": true,

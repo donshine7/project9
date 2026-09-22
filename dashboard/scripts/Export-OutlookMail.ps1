@@ -32,6 +32,39 @@ function Get-SmtpAddress($mail) {
     } catch { return $null }
 }
 
+function Get-RecipientSnapshots($mail) {
+    $snapshots = New-Object System.Collections.Generic.List[object]
+    foreach ($recipient in $mail.Recipients) {
+        try {
+            $kind = switch ([int]$recipient.Type) { 1 { 'to' } 2 { 'cc' } 3 { 'bcc' } default { 'unknown' } }
+            $smtp = $null
+            $addressEntry = $recipient.AddressEntry
+            if ($null -ne $addressEntry) {
+                try {
+                    if ([string]$addressEntry.Type -eq 'EX') {
+                        $exchangeUser = $addressEntry.GetExchangeUser()
+                        if ($null -ne $exchangeUser -and $exchangeUser.PrimarySmtpAddress) { $smtp = [string]$exchangeUser.PrimarySmtpAddress }
+                        if (-not $smtp) {
+                            $exchangeList = $addressEntry.GetExchangeDistributionList()
+                            if ($null -ne $exchangeList -and $exchangeList.PrimarySmtpAddress) { $smtp = [string]$exchangeList.PrimarySmtpAddress }
+                        }
+                        if (-not $smtp) { try { $smtp = [string]$addressEntry.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x39FE001E') } catch {} }
+                    } elseif ($addressEntry.Address) { $smtp = [string]$addressEntry.Address }
+                } catch {}
+            }
+            $snapshots.Add([pscustomobject]@{
+                type = $kind
+                displayName = [string]$recipient.Name
+                smtpAddress = if ($smtp) { $smtp.Trim().ToLowerInvariant() } else { $null }
+                resolved = [bool]$recipient.Resolved
+            })
+        } catch {
+            # 확인할 수 없는 개별 수신자는 누락시키되 문자열 To/CC는 별도로 보존한다.
+        }
+    }
+    return $snapshots.ToArray()
+}
+
 function Read-MailFolder($folder, [string]$direction) {
     if ($script:records.Count -ge $MaxItems) { return }
     $folderName = [string]$folder.Name
@@ -66,6 +99,8 @@ function Read-MailFolder($folder, [string]$direction) {
                 senderEmail = Get-SmtpAddress $item
                 to = [string]$item.To
                 cc = [string]$item.CC
+                storeDisplayName = $targetStoreDisplayName
+                recipients = Get-RecipientSnapshots $item
                 mailAt = $mailAt.ToUniversalTime().ToString('o')
                 body = $body
             })

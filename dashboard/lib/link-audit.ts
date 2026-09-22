@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { matterReferenceTokens, parseMatterNumber } from './matter-number';
 import { transaction, withDatabase } from './work-db';
+import { SOURCE_PRIORITY_VERSION } from './source-policy';
 
 type Row = Record<string, any>;
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -51,7 +52,7 @@ export function auditMailLinks() {
     }
     const runId = randomUUID(), snapshotId = randomUUID(), timestamp = new Date().toISOString();
     const result = { runId, mailCount: mails.length, linkCount: links.length, findings, createdAt: timestamp };
-    db.prepare("INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,?,?,'user-registration-excel-mail-v1',?,?,?)").run(snapshotId, JSON.stringify(mails.map(m => m.id)), JSON.stringify(matters), fingerprint, JSON.stringify(context), timestamp);
+    db.prepare("INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,?,?,?,?,?,?)").run(snapshotId, JSON.stringify(mails.map(m => m.id)), JSON.stringify(matters), SOURCE_PRIORITY_VERSION, fingerprint, JSON.stringify(context), timestamp);
     db.prepare("INSERT INTO decision_run(id,operation,agent_name,prompt_version,routing_snapshot_json,input_snapshot_id,status,started_at,completed_at,output_hash,result_json) VALUES (?,'matter_link_audit','deterministic','whole-reference-audit-v2',?,?,'succeeded',?,?,?,?)").run(runId, JSON.stringify({ parserHash: context.parserHash, model: null }), snapshotId, timestamp, timestamp, hash(result), JSON.stringify(result));
     for (const finding of findings) {
       const itemId = randomUUID();

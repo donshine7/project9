@@ -42,6 +42,10 @@ try {
     assert.equal(wikiDetail(type,id).stale,false);
   }
   assert.equal(wikiIndex().length,4);
+  for (let i=0;i<201;i+=1) createMatter({ourRef:`P27${String(i).padStart(4,'0')}`});
+  createMatter({ourRef:'T999999'});
+  assert.equal(wikiIndex().length,206);
+  assert.ok(wikiIndex().some(item=>item.type==='matter' && item.label==='T999999'));
   assert.equal(getMatter(matterId).matter.note,'수동 비고');
   const first=wikiDetail('matter',matterId).entries[0];
   const staleRun=start('matter',matterId); ingestWiki(result(staleRun));

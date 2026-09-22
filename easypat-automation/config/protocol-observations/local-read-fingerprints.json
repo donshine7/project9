@@ -103,6 +103,23 @@
       "responseIdentityEvidence": "p261793-live-documents.json",
       "matterBindingMode": "user-confirmed P261793 UI context plus fixed opaque document group",
       "rawStatementsStored": false
+    },
+    {
+      "sessionId": 9,
+      "templateId": "matter-detail.documents.matter-candidate.v1",
+      "command": "SELECT",
+      "statementCount": 1,
+      "fingerprint": "6ac4ff0ad3a9bff4c89c2158f2e4c0e68306f52c56081ae853cfc9fd4d2c9a37",
+      "provenance": "Fiddler Form-Data SQL Copy Value; local stdin inspection",
+      "containsExpectedReference": false,
+      "productionEnabled": false,
+      "boundMatterReference": "P261793",
+      "responseRoleCandidate": "matter-bound-document-records",
+      "responseRowCountObserved": 0,
+      "responseColumnCountObserved": 27,
+      "requestBinding": "GRP_KEY predicate equals the verified matter search identity",
+      "quarantinedSharedGroupMatched": false,
+      "rawStatementsStored": false
     }
   ],
   "excludedWriteSessions": [172, 178],

@@ -32,16 +32,17 @@ try {
   matterReference = inputMatter(process.argv.slice(2));
   const generic = readJson("../config/generic-read-template-registry.json");
   const policy = readJson("../config/safety-policy.json");
-  if (!generic.authorizedNonBaselineMatterReferences?.includes(matterReference) || generic.baselineMatterReference === matterReference ||
-      policy.genericProgressConstraints?.enabled !== false || policy.genericProgressConstraints?.mcpExposureEnabled !== false ||
+  const validationAuthorized=generic.authorizedNonBaselineMatterReferences?.includes(matterReference)||policy.genericDownloadConstraints?.authorizedValidationMatterReferences?.includes(matterReference);
+  if (!validationAuthorized || generic.baselineMatterReference === matterReference ||
+      policy.genericProgressConstraints?.enabled !== true || policy.genericProgressConstraints?.mcpExposureEnabled !== true ||
       policy.mutationOperationsEnabled !== false || policy.arbitrarySqlEnabled !== false) throw new Error("PREFLIGHT_REJECTED");
   const definition = (id) => structuredClone(generic.templates.find((template) => template.templateId === id));
   const countDefinition = definition("matter-search.exact-count.v1");
   const searchDefinition = definition("matter-search.exact-result.v1");
   const progressDefinition = definition("matter-detail.progress-records.v1");
   if (!countDefinition || !searchDefinition || !progressDefinition || countDefinition.productionEnabled !== true ||
-      searchDefinition.productionEnabled !== true || progressDefinition.productionEnabled !== false ||
-      progressDefinition.requiredDistinctNonBaselineMatterValidations !== 2 || progressDefinition.completedDistinctNonBaselineMatterValidations !== 0) {
+      searchDefinition.productionEnabled !== true || progressDefinition.productionEnabled !== true ||
+      progressDefinition.requiredDistinctNonBaselineMatterValidations !== 2 || progressDefinition.completedDistinctNonBaselineMatterValidations !== 2) {
     throw new Error("PREFLIGHT_REJECTED");
   }
 
@@ -95,7 +96,7 @@ try {
   const result = await lookup.list({ matterReference });
   if (result.matterReference !== matterReference || !Number.isInteger(result.count) || result.count < 1 || businessReadRequestCount !== 3) throw new Error("VALIDATION_REJECTED");
   await writeFile(attempt, JSON.stringify({ schemaVersion: 1, status: "success", operation: "generic-progress-list", matterReference, startedAt, completedAt: new Date().toISOString(), businessReadRequestCount, progressItemCount: result.count, safeProjectionFieldCount: 13 }), { mode: 0o600 });
-  console.log(JSON.stringify({ status: "live-generic-progress-validated", matterReference, businessReadRequestCount, progressItemCount: result.count, safeProjectionFieldCount: 13, rawRowsReturned: false, internalIdentityReturned: false, automaticRetryPerformed: false, serverMutationPerformed: false, productionEnabled: false, mcpExposureEnabled: false }));
+  console.log(JSON.stringify({ status: "live-generic-progress-validated", matterReference, businessReadRequestCount, progressItemCount: result.count, progress: result, safeProjectionFieldCount: 13, rawRowsReturned: false, internalIdentityReturned: false, automaticRetryPerformed: false, serverMutationPerformed: false, productionEnabled: true, mcpExposureEnabled: true }));
 } catch {
   if (claimed) {
     try { await writeFile(attempt, JSON.stringify({ schemaVersion: 1, status: "failed", operation: "generic-progress-list", matterReference, startedAt, completedAt: new Date().toISOString(), failureStage: stage }), { mode: 0o600 }); } catch {}

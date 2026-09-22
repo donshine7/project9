@@ -1,6 +1,8 @@
 import {collectLiteralEqualities} from "./matter-linkage.mjs";
 import {createReadOnlyBatch} from "./read-only-guard.mjs";
 import {fingerprintEnvelope} from "./template-fingerprint.mjs";
+import {diagnoseDocumentRequest} from "./document-request-diagnostic.mjs";
+import {DOCUMENT_GROUP_CAPTURE} from "./document-group-capture-version.mjs";
 
 const MASK=/!!!sanitized!!!|\[REDACTED\]|\*\*\*SANITIZED\*\*\*/i;
 
@@ -13,7 +15,9 @@ function uniqueValue(sql,column){
 export function inspectDocumentGroupIntermediateRequest({statement,mainEnvelope,documentEnvelope}){
   if(typeof statement!=="string"||!statement.length||statement.length>1024*1024||MASK.test(statement)||
      mainEnvelope?.templateId!=="matter-detail.main-record.v1"||documentEnvelope?.templateId!=="matter-detail.documents.v1")throw new Error("DOCUMENT_GROUP_INTERMEDIATE_REJECTED");
-  const envelope={templateId:"matter-detail.document-group-intermediate.v1",command:"SELECT",statements:[statement]};
+  const shape=diagnoseDocumentRequest(statement);
+  if(shape.shellSyntaxDetected||!shape.fromClauseObserved||!shape.predicateInspectionSupported)throw new Error("DOCUMENT_GROUP_INTERMEDIATE_REJECTED");
+  const envelope={templateId:DOCUMENT_GROUP_CAPTURE.templateId,command:"SELECT",statements:[statement]};
   createReadOnlyBatch([envelope]);createReadOnlyBatch([mainEnvelope]);createReadOnlyBatch([documentEnvelope]);
   const matterValue=uniqueValue(mainEnvelope.statements[0],"idx"),documentGroupValue=uniqueValue(documentEnvelope.statements[0],"GRP_KEY");
   let predicates,predicateInspectionSupported=true;

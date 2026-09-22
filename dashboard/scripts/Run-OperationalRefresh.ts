@@ -6,6 +6,13 @@ import { createBackup, importOutlookMail, withDatabase } from '../lib/work-db';
 import { auditMailLinks } from '../lib/link-audit';
 import { auditRelationshipCoverage } from '../lib/relationship-audit';
 import { captureAcceptedRelationshipEntries } from '../lib/wiki';
+import {
+  completeWorkRefreshStage,
+  createWorkRefresh,
+  failWorkRefreshStage,
+  getWorkRefresh,
+  startWorkRefreshStage,
+} from '../lib/work-refresh';
 
 // Main-task bridge. Specialist agents do not call this mutation tool.
 const [command, directory, ...args] = process.argv.slice(2);
@@ -19,7 +26,7 @@ const integrity = () => withDatabase(db=>({check:db.prepare('PRAGMA integrity_ch
 function requireIntegrity() { const result=integrity(); if(JSON.stringify(result.check)!=='{"integrity_check":"ok"}' || result.foreignKeys.length) throw Error('Integrity failed'); return result; }
 const protectedTables=['work_item','assignment','action_item','matter_note','organization','person','matter_group','matter_group_member','matter_party','user_feedback'];
 const protectedState=()=>withDatabase(db=>Object.fromEntries(protectedTables.map(t=>[t,hash(db.prepare(`SELECT * FROM ${t} ORDER BY rowid`).all())])));
-const counts=()=>withDatabase(db=>Object.fromEntries(['mail_item','matter','mail_matter_link','matter_party','action_item','entity_wiki_revision'].map(t=>[t,db.prepare(`SELECT count(*) n FROM ${t}`).get()])));
+const counts=()=>withDatabase(db=>Object.fromEntries(['mail_item','matter','mail_matter_link','matter_party','action_item','entity_wiki_revision','work_refresh_run','work_refresh_mail','work_refresh_stage','work_refresh_result'].map(t=>[t,db.prepare(`SELECT count(*) n FROM ${t}`).get()])));
 
 if(command==='import') {
   const packet=read('mail-export.json');
@@ -28,37 +35,51 @@ if(command==='import') {
   if(packet.folders.some((f:string)=>excluded.test(f)) || packet.records.some((r:{folderPath:string})=>excluded.test(r.folderPath))) throw Error('Excluded folder present');
   const from=Date.parse(packet.from),to=Date.parse(packet.to);
   if(!Number.isFinite(from)||!Number.isFinite(to)||to<=from||packet.records.some((r:{mailAt:string})=>Date.parse(r.mailAt)<from||Date.parse(r.mailAt)>=to)) throw Error('Range mismatch');
-  const backup=createBackup(), original=process.env.SSPAT_WORK_DB_PATH;
-  const baseline=counts(), before=protectedState();
-  const oldMailIds=analysisMailIndex().map(m=>String(m.id));
-  const clone=path.join(root,`import-dry-run-${randomUUID()}.db`);
-  copyFileSync(backup.file,clone,constants.COPYFILE_EXCL);
-  process.env.SSPAT_WORK_DB_PATH=clone;
-  const range={from:packet.from,to:packet.to,folders:packet.folders};
-  const dryRun=importOutlookMail(packet.records,range), dryIntegrity=requireIntegrity();
-  if(hash(before)!==hash(protectedState()))throw Error('Protected data changed in dry-run');
-  if(original===undefined)delete process.env.SSPAT_WORK_DB_PATH;else process.env.SSPAT_WORK_DB_PATH=original;
-  const applied=importOutlookMail(packet.records,range), appliedIntegrity=requireIntegrity();
-  if(hash(before)!==hash(protectedState()))throw Error('Protected data changed');
-  const replay=importOutlookMail(packet.records,range);
-  if(replay.imported!==0||replay.linked!==0)throw Error('Replay not idempotent');
-  const newMailIds=analysisMailIndex().map(m=>String(m.id)).filter(id=>!oldMailIds.includes(id));
-  const report={backup:backup.file,clone,baseline,after:counts(),dryRun,applied,replay,newMailIds,from:packet.from,to:packet.to,folders:packet.folders,excludedFolders:packet.excludedFolders,dryIntegrity,appliedIntegrity,protectedDataUnchanged:true};
-  save('import-report.json',report); console.log(JSON.stringify({...report,newMailIds:newMailIds.length}));
+  const refresh=createWorkRefresh({requestChannel:'codex',requestedBy:'장진태',mailWindowFrom:packet.from,mailWindowTo:packet.to});
+  const collectionStage=startWorkRefreshStage(refresh.id,'collection',packet.records.length);
+  const original=process.env.SSPAT_WORK_DB_PATH;
+  try {
+    const backup=createBackup();
+    const baseline=counts(), before=protectedState();
+    const oldMailIds=analysisMailIndex().map(m=>String(m.id));
+    const clone=path.join(root,`import-dry-run-${randomUUID()}.db`);
+    copyFileSync(backup.file,clone,constants.COPYFILE_EXCL);
+    process.env.SSPAT_WORK_DB_PATH=clone;
+    const range={from:packet.from,to:packet.to,folders:packet.folders,workRefreshRunId:refresh.id,workRefreshStageId:collectionStage.id};
+    const dryRun=importOutlookMail(packet.records,range), dryIntegrity=requireIntegrity();
+    if(hash(before)!==hash(protectedState()))throw Error('Protected data changed in dry-run');
+    if(original===undefined)delete process.env.SSPAT_WORK_DB_PATH;else process.env.SSPAT_WORK_DB_PATH=original;
+    const applied=importOutlookMail(packet.records,range), appliedIntegrity=requireIntegrity();
+    if(hash(before)!==hash(protectedState()))throw Error('Protected data changed');
+    const replay=importOutlookMail(packet.records,range);
+    if(replay.imported!==0||replay.linked!==0||replay.targeted!==0)throw Error('Replay not idempotent');
+    completeWorkRefreshStage(collectionStage.id,{processedCount:applied.received,outputCount:applied.imported,result:{syncId:applied.syncId,folders:packet.folders,excludedFolders:packet.excludedFolders}});
+    const newMailIds=analysisMailIndex().map(m=>String(m.id)).filter(id=>!oldMailIds.includes(id));
+    const report={workRefreshRunId:refresh.id,workRefresh:getWorkRefresh(refresh.id),backup:backup.file,clone,baseline,after:counts(),dryRun,applied,replay,newMailIds,from:packet.from,to:packet.to,folders:packet.folders,excludedFolders:packet.excludedFolders,dryIntegrity,appliedIntegrity,protectedDataUnchanged:true};
+    save('import-report.json',report); console.log(JSON.stringify({...report,newMailIds:newMailIds.length}));
+  } catch(error) {
+    if(original===undefined)delete process.env.SSPAT_WORK_DB_PATH;else process.env.SSPAT_WORK_DB_PATH=original;
+    try { failWorkRefreshStage(collectionStage.id,error instanceof Error ? error.name : 'IMPORT_FAILED'); } catch { /* preserve import failure */ }
+    throw error;
+  }
 } else if(command==='prepare') {
   const [operation,name,scope='new',size='40']=args;
-  const mailIds=scope==='all'?analysisMailIndex().map(m=>String(m.id)):read('import-report.json').newMailIds;
+  const importReport=scope==='all'?null:read('import-report.json');
+  const mailIds=scope==='all'?analysisMailIndex().map(m=>String(m.id)):importReport.newMailIds;
+  const refreshId=importReport?.workRefreshRunId as string|undefined;
+  const stage=refreshId?startWorkRefreshStage(refreshId,operation,mailIds.length):null;
   const jobs=[];
   for(let offset=0;offset<mailIds.length;offset+=Number(size)) {
-    const run=prepareAnalysis(operation,mailIds.slice(offset,offset+Number(size))), packet=analysisPacket(run.runId);
+    const run=prepareAnalysis(operation,mailIds.slice(offset,offset+Number(size)),stage?{workRefreshRunId:refreshId!,workRefreshStageId:stage.id}:undefined), packet=analysisPacket(run.runId);
     const file: string=`${name}-${jobs.length+1}.json`;
     save(file,packet);
     // Smaller transport view; original immutable packet remains available.
     const context={...packet.context,candidates:packet.context.candidates.filter((c:{kind:string;review_status:string})=>c.kind==='action'&&c.review_status==='accepted')};
     const view: string=`${name}-${jobs.length+1}-view.json`;
     save(view,{...packet,context,fullPacket:path.join(root,file)});
-    jobs.push({...run,file:path.join(root,file),view:path.join(root,view)});
+    jobs.push({...run,workRefreshRunId:refreshId??null,workRefreshStageId:stage?.id??null,file:path.join(root,file),view:path.join(root,view)});
   }
+  if(stage&&!mailIds.length)completeWorkRefreshStage(stage.id,{processedCount:0,outputCount:0,result:{reason:'no_target_mail'}});
   save(`${name}-manifest.json`,jobs);console.log(JSON.stringify(jobs));
 } else if(command==='audit') {
   const numberAudit=auditMailLinks(), relationships=auditRelationshipCoverage(),status=analysisStatus();
@@ -76,7 +97,7 @@ if(command==='import') {
   const accepted=[],held=[];
   for(const c of analysisStatus().candidates.filter(c=>runIds.includes(c.run_id)&&['fact','link','action'].includes(c.kind))) {
     if(c.review_status!=='pending'||!c.verifications.length||c.verifications.some((v:{value:string})=>v.value!=='confirmed')){held.push({id:c.id,reason:'not_pending_or_not_independently_confirmed'});continue;}
-    try { accepted.push(reviewCandidate(c.id,{action:'accept',expectedVersion:c.row_version,reason:'2026-09-15 사용자의 전체 단계 진행 승인. 원문·독립 검증·최신 버전·중복 보호를 통과한 후보만 반영.'})); }
+    try { accepted.push(reviewCandidate(c.id,{action:'accept',expectedVersion:c.row_version,reason:'사용자가 신규 메일 운영 흐름의 전체 진행을 요청함. 원문·독립 검증·최신 버전·중복 보호를 통과한 후보만 반영.'})); }
     catch(error) { if(!(error instanceof Error)||!/(재분석|이미|최신|중복|충돌)/.test(error.message))throw error;held.push({id:c.id,reason:error.message}); }
   }
   const relationshipEntries=captureAcceptedRelationshipEntries();

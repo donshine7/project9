@@ -21,6 +21,13 @@ test("generic downloader writes a fresh verified selection without exposing the 
   const result=await downloader.download(input);assert.equal(result.matterReference,"PT261130");assert.equal(result.downloaded,true);assert.equal(result.overwritten,false);assert.equal(sessions,1);assert.equal(transports,1);assert.deepEqual(await readFile(result.path),bytes);assert.doesNotMatch(JSON.stringify(result),/upload\/app_proc/);
 });
 
+test("generic downloader accepts the verified progress-document source template",async t=>{
+  const root=await mkdtemp(path.join(tmpdir(),"easypat-progress-download-"));t.after(()=>rm(root,{recursive:true,force:true}));
+  const progressPolicy={...policy,genericDownloadConstraints:{...policy.genericDownloadConstraints,sourceTemplateId:"matter-detail.progress-documents.v1"}};
+  const downloader=createGenericDocumentDownloader({policy:progressPolicy,root,prepareDownload:async()=>selection(),getSessionCookie:async()=>"JSESSIONID=verified",transport:async()=>({bytes:Buffer.from("12345"),size:5,contentType:"application/pdf"})});
+  const result=await downloader.download({...input,progressDocument:"위임계약서 (x)"});assert.equal(result.contentType,"application/pdf");
+});
+
 test("generic downloader never overwrites an existing destination",async t=>{
   const root=await mkdtemp(path.join(tmpdir(),"easypat-generic-download-"));t.after(()=>rm(root,{recursive:true,force:true}));await writeFile(path.join(root,"placeholder"),"safe");
   const matterRoot=path.join(root,"PT261130");const {mkdir}=await import("node:fs/promises");await mkdir(matterRoot);await writeFile(path.join(matterRoot,"수임내역서.pdf"),"old");let sessions=0,transports=0;

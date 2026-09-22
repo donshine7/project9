@@ -5,8 +5,11 @@ import {
   Check,
   ChevronRight,
   CircleAlert,
+  Clock3,
   Database,
   FileClock,
+  History,
+  Inbox,
   ListChecks,
   LoaderCircle,
   MessageSquareText,
@@ -17,6 +20,7 @@ import {
   ShieldCheck,
   Trash2,
   UserRound,
+  Workflow,
 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { readApiObject } from '../../lib/api-response';
@@ -67,6 +71,7 @@ type MatterGroup = {
   updatedAt: string;
 };
 type MailSummary = { id: string; summaryDate: string; content: string; summaryType: string; model: string | null; sourceMailIds: string[]; updatedAt: string };
+type EasyPatObservation = { id: string; fieldPath: string; observedValue: unknown; sourceId: string; observedAt: string; confidence: number };
 type ActionItem = {
   id: string;
   workItemId: string | null;
@@ -79,7 +84,41 @@ type ActionItem = {
   evidence: string | null;
   rowVersion: number;
 };
-type MatterDetail = { matter: MatterSummary; works: WorkItem[]; notes: MatterNote[]; actions: ActionItem[]; organizations: Organization[]; people: Person[]; groups: MatterGroup[]; mailSummaries: MailSummary[]; events: Array<{ id: string; eventType: string; actor: string; createdAt: string }> };
+type MatterDetail = { matter: MatterSummary; works: WorkItem[]; notes: MatterNote[]; actions: ActionItem[]; organizations: Organization[]; people: Person[]; groups: MatterGroup[]; mailSummaries: MailSummary[]; easyPat: { verified: boolean; lastObservedAt: string | null; observations: EasyPatObservation[] }; events: Array<{ id: string; eventType: string; actor: string; createdAt: string }> };
+type WorkRefreshStage = {
+  id: string;
+  stageKey: string;
+  attempt: number;
+  status: string;
+  inputCount: number;
+  processedCount: number;
+  outputCount: number;
+  errorCount: number;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+type WorkRefreshRun = {
+  id: string;
+  requestChannel: string;
+  requestedBy: string;
+  requestedAt: string;
+  mailWindowFrom: string;
+  mailWindowTo: string;
+  reviewedMailFrom: string | null;
+  reviewedMailTo: string | null;
+  status: string;
+  targetMailCount: number;
+  reviewedMailCount: number;
+  pendingMailCount: number;
+  appliedItemCount: number;
+  heldItemCount: number;
+  errorCount: number;
+  progressPercent: number;
+  collectionCompletedAt: string | null;
+  completedAt: string | null;
+  lastAppliedSourceAt: string | null;
+  stages?: WorkRefreshStage[];
+};
 
 const workTypes = ['출원', '중간사건', '등록', '기타'];
 const serviceTypes = ['', '일반출원', '우선심사출원', '메이킹', '기획', '가출원'];
@@ -107,6 +146,8 @@ export default function MattersPage() {
   const [syncMode, setSyncMode] = useState('day');
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
+  const [workRefreshRuns, setWorkRefreshRuns] = useState<WorkRefreshRun[]>([]);
+  const [selectedWorkRefresh, setSelectedWorkRefresh] = useState<WorkRefreshRun | null>(null);
 
   const loadList = useCallback(async (search = '') => {
     const data = await request<{ matters: MatterSummary[] }>(`/api/matters?q=${encodeURIComponent(search)}`);
@@ -119,23 +160,39 @@ export default function MattersPage() {
     setDetail(await request<MatterDetail>(`/api/matters/${id}`));
   }, []);
 
+  const loadWorkRefreshes = useCallback(async (preferredId?: string) => {
+    const data = await request<{ runs: WorkRefreshRun[] }>('/api/work-refresh?limit=6');
+    setWorkRefreshRuns(data.runs);
+    const selectedId = preferredId && data.runs.some((run) => run.id === preferredId) ? preferredId : data.runs[0]?.id;
+    setSelectedWorkRefresh(selectedId ? await request<WorkRefreshRun>(`/api/work-refresh/${encodeURIComponent(selectedId)}`) : null);
+  }, []);
+
+  const selectWorkRefresh = useCallback(async (id: string) => {
+    try {
+      setSelectedWorkRefresh(await request<WorkRefreshRun>(`/api/work-refresh/${encodeURIComponent(id)}`));
+    } catch (error) {
+      setNotice({ type: 'error', text: error instanceof Error ? error.message : '실행 이력을 불러오지 못했습니다.' });
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
       await loadList(query);
       if (selectedId) await loadDetail(selectedId);
+      await loadWorkRefreshes();
     } catch (error) {
       setNotice({ type: 'error', text: error instanceof Error ? error.message : '새로고침에 실패했습니다.' });
     } finally {
       setBusy(false);
     }
-  }, [loadDetail, loadList, query, selectedId]);
+  }, [loadDetail, loadList, loadWorkRefreshes, query, selectedId]);
 
   useEffect(() => {
-    Promise.all([loadList(''), request<{ integrity: string; migrations: Array<{ version: string }>; path: string }>('/api/work-db/status')])
+    Promise.all([loadList(''), request<{ integrity: string; migrations: Array<{ version: string }>; path: string }>('/api/work-db/status'), loadWorkRefreshes()])
       .then(([, status]) => setDbStatus(status))
       .catch((error) => setNotice({ type: 'error', text: error.message }));
-  }, [loadList]);
+  }, [loadList, loadWorkRefreshes]);
 
   useEffect(() => {
     loadDetail(selectedId).catch((error) => setNotice({ type: 'error', text: error.message }));
@@ -199,9 +256,10 @@ export default function MattersPage() {
   const syncMail = async () => {
     setBusy(true);
     try {
-      const result = await request<{ imported: number; skipped: number; linked: number; affectedSummaries: number }>('/api/mail-sync', { method: 'POST', body: JSON.stringify({ mode: syncMode, from: rangeFrom, to: rangeTo }) });
+      const result = await request<{ imported: number; skipped: number; linked: number; affectedSummaries: number; workRefreshRunId: string }>('/api/mail-sync', { method: 'POST', body: JSON.stringify({ mode: syncMode, from: rangeFrom, to: rangeTo }) });
       await loadList(query);
       if (selectedId) await loadDetail(selectedId);
+      await loadWorkRefreshes(result.workRefreshRunId);
       setNotice({ type: 'success', text: `메일 ${result.imported}건 신규 수집, ${result.skipped}건 중복 제외, 사건 연결 ${result.linked}건, 날짜별 요약 ${result.affectedSummaries}건을 반영했습니다.` });
     } catch (error) {
       setNotice({ type: 'error', text: error instanceof Error ? error.message : '메일을 수집하지 못했습니다.' });
@@ -252,6 +310,13 @@ export default function MattersPage() {
           <div className="mail-sync-controls"><select value={syncMode} onChange={(event) => setSyncMode(event.target.value)}><option value="day">최근 1일</option><option value="week">최근 1주일</option><option value="range">기간 설정</option></select>{syncMode === 'range' && <><input aria-label="수집 시작일" type="date" value={rangeFrom} onChange={(event) => setRangeFrom(event.target.value)} /><input aria-label="수집 종료일" type="date" value={rangeTo} onChange={(event) => setRangeTo(event.target.value)} /></>}<button className="primary-button" type="button" onClick={syncMail} disabled={busy || (syncMode === 'range' && (!rangeFrom || !rangeTo))}>{busy ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />} 이메일 읽기</button></div>
         </section>
 
+        <WorkRefreshMonitor
+          run={selectedWorkRefresh}
+          runs={workRefreshRuns}
+          onSelect={selectWorkRefresh}
+          onLatest={() => workRefreshRuns[0] && void selectWorkRefresh(workRefreshRuns[0].id)}
+        />
+
         {notice && <div className={`form-notice ${notice.type}`}>{notice.type === 'success' ? <Check size={15} /> : <CircleAlert size={15} />}<span>{notice.text}</span></div>}
 
         <div className="matter-layout">
@@ -287,6 +352,12 @@ export default function MattersPage() {
                   <div className="provenance-strip"><ShieldCheck size={15} /><span>{detail.matter.userConfirmed ? '사용자 확정' : '자동 추정·검토 필요'}</span><span>출처 {detail.matter.sourceType}</span><span>신뢰도 {Math.round(Number(detail.matter.confidence) * 100)}%</span><span>버전 {detail.matter.rowVersion}</span></div>
                   <EntityNoteEditor label="사건 비고" value={detail.matter.note} busy={busy} onSave={(note) => applyDetail(request(`/api/matters/${detail.matter.id}/note`, { method: 'PATCH', body: JSON.stringify({ note, expectedVersion: detail.matter.rowVersion }) }), '사건 비고를 변경했습니다.')} />
                 </article>
+
+                <section className="matter-section panel">
+                  <div className="panel-heading"><div><span className="panel-label">EASYPAT SOURCE CHECK</span><h2>EasyPAT 원본 확인</h2></div><ShieldCheck size={19} /></div>
+                  <div className="provenance-strip"><span>{detail.easyPat.verified ? '원본 확인 기록 있음' : '원본 확인 대기'}</span><span>{detail.easyPat.lastObservedAt ? `최근 확인 ${new Date(detail.easyPat.lastObservedAt).toLocaleString('ko-KR')}` : '확인 시각 없음'}</span><span>운영값 자동 덮어쓰기 없음</span></div>
+                  <div className="mail-summary-list">{detail.easyPat.observations.slice(0, 8).map((item) => <article key={item.id}><div><strong>{item.fieldPath.replace('easy_pat.', '')}</strong><span>EasyPAT · 신뢰도 {Math.round(Number(item.confidence) * 100)}%</span></div><p>{typeof item.observedValue === 'string' ? item.observedValue : JSON.stringify(item.observedValue)}</p></article>)}{!detail.easyPat.observations.length && <div className="selector-empty">Codex가 EasyPAT MCP로 전체 당소관리번호를 확인하면 허용된 결과가 여기에 기록됩니다.</div>}</div>
+                </section>
 
                 <section className="matter-section panel">
                   <div className="panel-heading"><div><span className="panel-label">DAILY MAIL SUMMARY</span><h2>날짜별 이메일 중요내용</h2></div><MailSummaryCount count={detail.mailSummaries.length} /></div>
@@ -326,6 +397,57 @@ export default function MattersPage() {
       </main>
     </div>
   );
+}
+
+const refreshStatusLabels: Record<string, string> = {
+  requested: '요청 접수', collecting: '메일 수집 중', analyzing: '분석 중', review_pending: '검토 대기',
+  applying: '반영 중', completed: '완료', partial: '부분 완료', failed: '실패', cancelled: '취소',
+};
+const refreshStageLabels: Record<string, string> = {
+  collection: '메일 수집', mail_fact_extraction: '사실 추출', matter_linking: '사건 연결', action_judgement: 'Action 판단',
+  high_risk_verification: '고위험 검증', easy_pat_verification: 'EasyPAT 확인', wiki_revision: 'Wiki 갱신', application: '운영 DB 반영',
+};
+const stageStatusLabels: Record<string, string> = { pending: '대기', running: '진행 중', completed: '완료', partial: '부분 완료', failed: '실패', skipped: '건너뜀' };
+
+function formatRefreshTime(value: string | null | undefined) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return '—';
+  return parsed.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function formatRefreshRange(from: string | null | undefined, to: string | null | undefined, emptyText: string) {
+  if (!from || !to) return emptyText;
+  return `${formatRefreshTime(from)} – ${formatRefreshTime(to)}`;
+}
+
+function WorkRefreshMonitor({ run, runs, onSelect, onLatest }: { run: WorkRefreshRun | null; runs: WorkRefreshRun[]; onSelect: (id: string) => void; onLatest: () => void }) {
+  const latestId = runs[0]?.id;
+  const isLatest = Boolean(run && run.id === latestId);
+  return <section className="work-refresh-panel panel" aria-labelledby="work-refresh-title">
+    <div className="work-refresh-heading">
+      <div><span className="panel-label">WORK REFRESH LEDGER</span><h2 id="work-refresh-title">업무 정리 실행 현황</h2><p>메일 시각, 요청 접수 시각과 처리 완료 시각을 구분하여 표시합니다.</p></div>
+      {run && <div className="work-refresh-heading-actions"><span className={`refresh-status status-${run.status}`}>{refreshStatusLabels[run.status] || run.status}</span>{!isLatest && <button type="button" className="ghost-button" onClick={onLatest}><History size={13} /> 최신 실행</button>}</div>}
+    </div>
+    {!run ? <div className="work-refresh-empty"><Workflow size={20} /><div><strong>아직 기록된 업무 정리 실행이 없습니다.</strong><span>다음 이메일 갱신부터 요청 시각과 처리 범위가 여기에 누적됩니다.</span></div></div> : <>
+      <div className="refresh-time-grid">
+        <article><Inbox size={16} /><div><span>검토 대상 기간</span><strong>{formatRefreshRange(run.mailWindowFrom, run.mailWindowTo, '기간 없음')}</strong></div></article>
+        <article><Check size={16} /><div><span>실제 검토된 메일 범위</span><strong>{formatRefreshRange(run.reviewedMailFrom, run.reviewedMailTo, '아직 검토된 메일 없음')}</strong></div></article>
+        <article className="request-time"><Clock3 size={16} /><div><span>최종 반영 기준 시각 · 요청 접수</span><strong>{formatRefreshTime(run.requestedAt)}</strong></div></article>
+        <article><FileClock size={16} /><div><span>처리 완료 시각</span><strong>{run.completedAt ? formatRefreshTime(run.completedAt) : '처리 진행 중'}</strong></div></article>
+      </div>
+      <div className="refresh-progress-block">
+        <div className="refresh-progress-copy"><div><strong>메일 검토 진행률</strong><span>{run.reviewedMailCount} / {run.targetMailCount}건</span></div><strong>{run.progressPercent}%</strong></div>
+        <div className="refresh-progress-track" role="progressbar" aria-label="메일 검토 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={run.progressPercent}><span style={{ width: `${Math.min(100, Math.max(0, run.progressPercent))}%` }} /></div>
+        <div className="refresh-counts"><span>대기 <strong>{run.pendingMailCount}</strong></span><span>반영 <strong>{run.appliedItemCount}</strong></span><span className={run.heldItemCount ? 'has-warning' : ''}>보류 <strong>{run.heldItemCount}</strong></span><span className={run.errorCount ? 'has-error' : ''}>오류 <strong>{run.errorCount}</strong></span>{run.lastAppliedSourceAt && <span>반영 근거 최신 시각 <strong>{formatRefreshTime(run.lastAppliedSourceAt)}</strong></span>}</div>
+      </div>
+      <div className="refresh-stage-section">
+        <div className="refresh-section-label"><Workflow size={14} /><strong>단계별 처리</strong></div>
+        <div className="refresh-stage-list">{run.stages?.length ? run.stages.map((stage) => <article className={`refresh-stage status-${stage.status}`} key={stage.id}><span className="refresh-stage-dot" /><div><strong>{refreshStageLabels[stage.stageKey] || stage.stageKey}</strong><small>{stage.inputCount}건 입력 · {stage.processedCount}건 처리 · {stage.outputCount}건 결과{stage.attempt > 1 ? ` · ${stage.attempt}차 시도` : ''}</small></div><span>{stageStatusLabels[stage.status] || stage.status}</span></article>) : <div className="refresh-stage-empty">등록된 처리 단계가 없습니다.</div>}</div>
+      </div>
+    </>}
+    {runs.length > 1 && <details className="refresh-history"><summary><History size={14} /> 최근 실행 이력 <span>{Math.min(runs.length, 6)}건</span></summary><div className="refresh-history-list">{runs.slice(0, 6).map((item) => <button type="button" className={item.id === run?.id ? 'selected' : ''} onClick={() => onSelect(item.id)} key={item.id}><span><strong>{formatRefreshTime(item.requestedAt)}</strong><small>{formatRefreshRange(item.mailWindowFrom, item.mailWindowTo, '기간 없음')}</small></span><span className={`refresh-status status-${item.status}`}>{refreshStatusLabels[item.status] || item.status}</span></button>)}</div></details>}
+  </section>;
 }
 
 function MailSummaryCount({ count }: { count: number }) {

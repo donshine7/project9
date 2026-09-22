@@ -8,23 +8,26 @@ flowchart TB
         REGMAIL["사건 등록 메일"]
         EXCEL["업무 정리 Excel"]
         MANUAL["대시보드 · Codex<br/>사용자 확정 입력"]
-        EASYPAT["EasyPAT<br/>업무상 원본 · 현재 미연결"]
+        EASYPAT["EasyPAT MCP<br/>업무상 원본 · 읽기 전용 7개 도구"]
     end
 
-    ORCH --> READER["Outlook 읽기 전용 어댑터<br/>메일 상태·위치 변경 없음"]
+    ORCH --> REFRESHRUN["업무 정리 실행 관리자<br/>요청 시각 · 단계 시도 · 재시작 · 완료 판정"]
+    REFRESHRUN --> READER["Outlook 읽기 전용 어댑터<br/>메일 상태·위치 변경 없음"]
     OUTLOOK --> READER
     SENT --> READER
     EXCLUDED -. "수집 전 차단" .-> READER
     REGMAIL --> STAGE
     EXCEL --> STAGE
     MANUAL --> VALIDATE
-    EASYPAT -. "향후 연결 시 충돌 검토" .-> VALIDATE
+    EASYPAT --> EASYCHECK["전체 당소관리번호 정확 조회<br/>허용 필드 검증 · source-priority-v2"]
+    EASYCHECK --> DECISIONDB
+    EASYCHECK -->|사용자 확정값과 충돌| REVIEW
     READER --> STAGE["수집 Staging<br/>Message-ID · 본문 해시 중복 제거"]
 
     subgraph Tools["결정적 Tool 파이프라인 · LLM 없음"]
         NORMALIZE["본문 정규화"] --> PARSE["관리번호 · 주소 · 날짜 파싱"]
         PARSE --> THREAD["Thread 연결"]
-        THREAD --> RULES["출처 우선순위 · 상태전이 · 중복 검증"]
+        THREAD --> RULES["출처 우선순위<br/>EasyPAT > 사건등록 완료 메일 > Excel > 메일 추정<br/>사용자 확정값 보호"]
         GROUPCHECK["그룹 후보 검증<br/>전체 번호 · 구성원 수 · 형식 검사"]
     end
 
@@ -35,7 +38,7 @@ flowchart TB
     CLEAR -->|예| CANDIDATE["변경 이벤트 후보"]
 
     subgraph Agents["프로젝트 전용 Codex 에이전트 · config/agents"]
-        MAILAI["mail_intake<br/>Luna · medium<br/>메일 사실 구조화"]
+        MAILAI["mail_intake<br/>Terra · high<br/>메일 사실 구조화"]
         LINKAI["matter_linker<br/>Terra · high<br/>사건·업무 연결"]
         ACTIONAI["action_analyst<br/>Sol · high<br/>본인·팀원 Action"]
         VERIFYAI["risk_verifier<br/>Sol · high<br/>고위험 독립 검증"]
@@ -59,7 +62,7 @@ flowchart TB
         CORE["matter · group · organization · person<br/>work_item · assignment · action"]
         MAILDB["mail_item · mail_matter_link<br/>EntryID 중복 방지 · 원문 근거"]
         DAILY["mail_daily_summary<br/>날짜별 규칙 기반 1차 요약"]
-        RUNS["sync_run · decision_run<br/>모델 · 추론 강도 · 입력 스냅샷"]
+        RUNS["work_refresh_run · mail · stage · result<br/>요청 시각 · 검토 범위 · 단계 결과 · 근거<br/>sync_run · decision_run 연결"]
         DECISIONDB["decision_item · evidence<br/>필드별 제안값 · 신뢰도 · 근거"]
         FEEDBACK["user_feedback · comparison<br/>사용자 최종값 · 수정 이유 · 차이"]
         EVAL["evaluation_case · result<br/>동결 입력 · 기대값 · 회귀 결과"]
@@ -72,14 +75,17 @@ flowchart TB
     TX --> MAILDB
     MAILDB --> DAILY
     TX --> RUNS
+    REFRESHRUN --> RUNS
     TX --> FEEDBACK
     EVENT --> WIKIAI --> WIKI
 
     subgraph Dashboard["로컬 대시보드 · 127.0.0.1:4173"]
         SELECTOR["PROJECT SELECTOR<br/>당소관리번호 · 그룹 · 회사 · 사람"]
         MATTERVIEW["사건 개요<br/>업무단계 · 현재상태 · 사건 비고"]
+        EASYVIEW["EasyPAT 원본 확인<br/>마지막 확인 시각 · 허용 관측값"]
         PARTYVIEW["회사 · 사람 · 그룹<br/>연결 · 개별 비고"]
         DAILYVIEW["날짜별 이메일 중요내용<br/>근거 메일 수"]
+        REFRESHVIEW["업무 정리 실행 현황<br/>대상 기간 · 실제 검토 범위 · 요청/완료 시각<br/>단계 진행률 · 적용/보류/오류"]
         ACTIONVIEW["Action<br/>장진태 · 박준호 · 황현우"]
         REVIEWVIEW["검토함 · 그룹 확인 대기<br/>Wiki · 근거 · 판단 비교"]
         SETTINGS["모델 설정<br/>동작별 모델 · 추론 강도"]
@@ -87,8 +93,10 @@ flowchart TB
     end
 
     CORE --> SELECTOR --> MATTERVIEW
+    DECISIONDB --> EASYVIEW
     CORE --> PARTYVIEW
     DAILY --> DAILYVIEW
+    RUNS --> REFRESHVIEW
     CORE --> ACTIONVIEW
     WIKI --> REVIEWVIEW
     RUNS --> REVIEWVIEW
@@ -109,7 +117,7 @@ flowchart TB
     POLICY -->|회귀 통과 버전만 활성화| ORCH
 
     subgraph Existing["기존 기능 · 유지"]
-  HIWORKS["Hiworks"] --> VBA["Outlook VBA · HiworksRulesFinal<br/>22단계 자동분류<br/>@kpaa.or.kr 도메인·회원 경조사·마감리스트 예외 포함<br/>경조사 회귀: 김성규 모친상·김남명 부친상<br/>교육 회귀: edu@kpaa.or.kr 의무연수 안내·재발송<br/>NewMailEx 호출 모듈과 수정 모듈 일치 확인<br/>CJK 범위 ChrW 보존·2026-09-16 실행본 원본 일치 확인"]
+  HIWORKS["Hiworks"] --> VBA["Outlook VBA · HiworksRulesFinal<br/>22단계 자동분류<br/>@kpaa.or.kr 도메인·회원 경조사·마감리스트 예외 포함<br/>mslee@sspat.net 직접 발신은 항상 해외 폴더<br/>P·T·D 6자리+국가 접미사는 독립 해외 신호<br/>hjlee@sspat.net 직접 발신은 단독 해외 신호<br/>경조사 회귀: 김성규 모친상·김남명 부친상<br/>교육 회귀: edu@kpaa.or.kr 의무연수 안내·재발송<br/>2026-09-18 NewMailEx 실동작 확인<br/>2026-09-18 최신 실행본 컴파일·저장·재시작 완료<br/>신규 메일 종단간 재관찰 대기<br/>CJK 범위 ChrW 보존"]
         VBA --> OUTLOOK
         HUB["/ 업무 허브"] --> MAILPAGE["/mail 자동분류 운영판"]
         HUB --> MATTERPAGE["/matters 사건·업무·메모·Action CRUD<br/>1단계 구현 완료"]

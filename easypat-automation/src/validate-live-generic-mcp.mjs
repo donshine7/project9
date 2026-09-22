@@ -7,7 +7,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const projectRoot = path.resolve(fileURLToPath(new URL("../", import.meta.url)));
 const serverEntry = fileURLToPath(new URL("./mcp-server.mjs", import.meta.url));
 const attemptRoot = path.resolve(fileURLToPath(new URL("../.local/templates-user/", import.meta.url)));
-const attemptPath = path.join(attemptRoot, "live-generic-mcp-attempt.v1.json");
+const attemptPath = path.join(attemptRoot, "live-generic-mcp-attempt.v2.json");
 const matterReference = "PT261130";
 let client;
 let claimed = false;
@@ -34,7 +34,7 @@ try {
   client = new Client({ name: "easypat-generic-live-validator", version: "1.0.0" });
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [serverEntry], cwd: projectRoot, stderr: "pipe" }));
   const tools = await client.listTools();
-  if (tools.tools.length !== 6 || !tools.tools.some((tool) => tool.name === "easypat_get_matter_summary")) throw new Error("MCP_REJECTED");
+  if (tools.tools.length !== 9 || !tools.tools.some((tool) => tool.name === "easypat_get_matter_summary")) throw new Error("MCP_REJECTED");
   const status = await client.callTool({ name: "easypat_status", arguments: {} });
   if (status.isError || status.structuredContent?.genericMatterSummaryEnabled !== true) throw new Error("MCP_REJECTED");
 
@@ -51,13 +51,13 @@ try {
     matterReference,
     startedAt,
     completedAt,
-    toolCount: 6,
+    toolCount: 9,
     safeProjectionFieldCount: 7,
   }), { mode: 0o600 });
   console.log(JSON.stringify({
     status: "live-generic-mcp-validated",
     matterReference,
-    toolCount: 6,
+    toolCount: 9,
     safeProjectionFieldCount: 7,
     rawRowsReturned: false,
     internalIdentityReturned: false,

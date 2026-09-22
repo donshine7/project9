@@ -25,6 +25,7 @@ import {
   overseasSignals,
   roadmap,
   rules,
+  runtimeObservation,
   type RuleCategory,
 } from '../data';
 
@@ -136,8 +137,8 @@ export default function Home() {
               <p>현재 적용된 Outlook 자동분류와 향후 업무 자동화 계획을 분리해 관리합니다.</p>
             </div>
             <div className="updated-chip">
-              <Check size={15} />
-              최종 정책 반영
+              <ShieldCheck size={15} />
+              실행본 반영 · 신규 메일 관찰 대기
             </div>
           </div>
 
@@ -145,8 +146,8 @@ export default function Home() {
             <article className="metric-card primary-metric">
               <div className="metric-icon"><Activity size={20} /></div>
               <span>Outlook (classic) 자동분류</span>
-              <strong>적용 완료</strong>
-              <p>사용자 PC의 classic 앱에서 VBA 모듈 실행</p>
+              <strong>{runtimeObservation.status}</strong>
+              <p>{runtimeObservation.note}</p>
             </article>
             <article className="metric-card">
               <span>우선순위 판정</span>
@@ -159,9 +160,9 @@ export default function Home() {
               <p>기존 최상위 폴더만 사용</p>
             </article>
             <article className="metric-card">
-              <span>경계조건 검증</span>
-              <strong>13<span>건</span></strong>
-              <p>샘플 메일 및 PT·PI 예외 확인</p>
+              <span>실메일 분류 일치</span>
+              <strong>{runtimeObservation.matchedClassified}<span>/{runtimeObservation.expectedClassified}건</span></strong>
+              <p>{runtimeObservation.period} · 총 {runtimeObservation.observed}건 관찰</p>
             </article>
           </div>
 

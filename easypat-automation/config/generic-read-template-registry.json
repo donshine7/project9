@@ -1,12 +1,45 @@
 {
   "schemaVersion": 1,
   "productionEnabled": true,
-  "status": "generic-summary-validated-progress-candidate-document-source-discovery-required",
+  "status": "generic-summary-application-search-progress-document-list-download-and-extraction-ready",
   "requiredDistinctNonBaselineMatterValidations": 2,
   "completedDistinctNonBaselineMatterValidations": 2,
   "baselineMatterReference": "P261793",
   "authorizedNonBaselineMatterReferences": ["PT261129", "PT261130"],
   "validatedNonBaselineMatterReferences": ["PT261129", "PT261130"],
+  "summaryMcpLiveValidation": {
+    "matterReference": "PT261130",
+    "toolCount": 8,
+    "safeProjectionFieldCount": 7,
+    "rawValuesReturned": false,
+    "internalIdentityReturned": false,
+    "serverMutationPerformed": false
+  },
+  "applicationNumberSearch": {
+    "productionEnabled": true,
+    "liveValidationPending": false,
+    "requiredDistinctMatterValidations": 2,
+    "completedDistinctMatterValidations": 2,
+    "validatedMatterReferences": ["P261048", "P261315"],
+    "sourceTemplateIds": [
+      "matter-search.exact-count.v1",
+      "matter-search.exact-result.v1"
+    ],
+    "sourcePredicateColumn": "ourref",
+    "targetPredicateColumn": "n_app",
+    "responseApplicationNumberColumn": "n_app",
+    "maximumSearchCandidateCount": 500,
+    "mcpLiveValidation": {
+      "matterReference": "P261048",
+      "toolCount": 9,
+      "safeProjectionFieldCount": 5,
+      "exactApplicationNumberMatchRequired": true,
+      "rawRowsReturned": false,
+      "internalIdentityReturned": false,
+      "serverMutationPerformed": false
+    },
+    "status": "cross-matter-and-mcp-ready"
+  },
   "templates": [
     {
       "templateId": "matter-search.exact-count.v1",
@@ -65,14 +98,14 @@
         "responseColumn": "idx"
       },
       "expectedResponseColumnsSource": "main-record-response-schema.json",
-      "status": "cross-matter-live-validated"
+      "status": "cross-matter-and-mcp-live-validated"
     },
     {
       "templateId": "matter-detail.progress-records.v1",
       "operation": "list-progress",
       "command": "SELECT",
       "statementCount": 1,
-      "productionEnabled": false,
+      "productionEnabled": true,
       "baseFingerprint": "4b1f31613e243086f905cbaf101a6fab0bad0c104954becfb5d07719b95c912b",
       "parameterization": {
         "mode": "single-scalar-equality",
@@ -88,8 +121,84 @@
       },
       "expectedResponseColumns": ["serial", "sourcecode", "idx", "idx_parent", "no_rec", "d_rec", "d_noti", "rec_doc", "rec_div", "rec_ck", "rec_memo", "rec_memo1", "rec_memo2", "rec_memo3", "d_brief_due", "d_brief", "clerk_br", "clerk_br_id", "d_opinion_due", "d_opinion", "op_doc", "d_proc", "proc_memo", "n_extend", "d_extend", "d_due", "d_pre", "d_pre_rep", "pre_doc", "pre_memo", "no_pre", "judge", "clerk", "clerk_id", "part_class", "part_code", "part", "pre_div", "memo", "d_sort", "d_pat_rep", "d_direct", "direct_memo", "ck_proc", "method", "d_modify", "del_flag", "clerk_op", "clerk_op_id", "d_pre_due", "clerk_pr", "clerk_pr_id", "ck_ids", "d_edit", "sort"],
       "requiredDistinctNonBaselineMatterValidations": 2,
-      "completedDistinctNonBaselineMatterValidations": 0,
-      "status": "offline-candidate-live-cross-matter-validation-required"
+      "completedDistinctNonBaselineMatterValidations": 2,
+      "validatedNonBaselineMatterReferences": ["PT261129", "PT261130"],
+      "status": "cross-matter-live-validated"
+    },
+    {
+      "templateId": "matter-detail.documents.matter-candidate.v1",
+      "operation": "list-documents",
+      "command": "SELECT",
+      "statementCount": 1,
+      "productionEnabled": true,
+      "baseFingerprint": "6ac4ff0ad3a9bff4c89c2158f2e4c0e68306f52c56081ae853cfc9fd4d2c9a37",
+      "parameterization": {
+        "mode": "single-scalar-equality",
+        "source": "verified-search-identity",
+        "predicateColumn": "GRP_KEY",
+        "sourceTemplateId": "matter-search.exact-result.v1",
+        "sourceColumn": "idx"
+      },
+      "responseVerification": {
+        "mode": "statement-literal-all-rows",
+        "predicateColumn": "GRP_KEY",
+        "responseColumn": "GRP_KEY"
+      },
+      "responsePredicateSetVerification": {
+        "mode": "statement-literals-all-rows",
+        "columns": ["DELETEFLG", "DOC_NUM", "DIV", "GRP_KEY"]
+      },
+      "expectedResponseColumns": [
+        "IDX", "DIV", "GRP_KEY", "DOC_NUM", "DOC_NAME", "REG_DATE", "FILE_NAME", "FILE_NAME_OLD", "FILE_NAME_UPLOAD", "FILE_SIZE", "MEMO", "DOWN_COUNT", "CK_OPEN", "MUID", "MUNAME", "DELETEFLG", "DELETEDT", "DELETE_UID", "DELETE_UNAME", "SORT", "USR_DATE", "serial", "family", "_TABLENAME", "_SEQ", "_PNUMBER", "_FILENO"
+      ],
+      "requiredDistinctNonBaselineMatterValidations": 2,
+      "completedDistinctNonBaselineMatterValidations": 2,
+      "validatedNonBaselineMatterReferences": ["PT261129", "PT261130"],
+      "status": "cross-matter-and-mcp-live-validated-empty-results"
+    },
+    {
+      "templateId": "matter-detail.document-group-intermediate.v2",
+      "operation": "list-documents",
+      "command": "SELECT",
+      "statementCount": 1,
+      "productionEnabled": true,
+      "baseFingerprint": "0720d38ec020d5e2fbeb7a00497f2d9e1d8580f176ac71fe1ca072347be4fe6f",
+      "parameterization": {
+        "mode": "single-scalar-equality",
+        "source": "trusted-derived-identity",
+        "predicateColumn": "idx"
+      },
+      "responseVerification": {
+        "mode": "statement-literal-equality",
+        "predicateColumn": "idx",
+        "responseColumn": "idx"
+      },
+      "expectedResponseColumns": ["serial", "sourcecode", "idx", "idx_parent", "no_rec", "d_rec", "d_noti", "rec_doc", "rec_div", "rec_ck", "rec_memo", "rec_memo1", "rec_memo2", "rec_memo3", "d_brief_due", "d_brief", "clerk_br", "clerk_br_id", "d_opinion_due", "d_opinion", "op_doc", "d_proc", "proc_memo", "n_extend", "d_extend", "d_due", "d_pre", "d_pre_rep", "pre_doc", "pre_memo", "no_pre", "judge", "clerk", "clerk_id", "part_class", "part_code", "part", "pre_div", "memo", "d_sort", "d_pat_rep", "d_direct", "direct_memo", "ck_proc", "method", "d_modify", "del_flag", "clerk_op", "clerk_op_id", "d_pre_due", "clerk_pr", "clerk_pr_id", "ck_ids", "d_edit", "sort"],
+      "validatedMatterReferences": ["PT261268", "P261793"],
+      "status": "cross-matter-live-validated"
+    },
+    {
+      "templateId": "matter-detail.progress-documents.v1",
+      "operation": "list-documents",
+      "command": "SELECT",
+      "statementCount": 1,
+      "productionEnabled": true,
+      "baseFingerprint": "745c3fa8aec8ad8246bb90492f633c8278a8b44dcdf51d7aeaedce01e076abe4",
+      "parameterization": {
+        "mode": "scalar-equality-as-literal",
+        "source": "trusted-derived-identity",
+        "predicateColumn": "GRP_KEY"
+      },
+      "responsePredicateSetVerification": {
+        "mode": "statement-literals-all-rows",
+        "columns": ["DELETEFLG", "DOC_NUM", "DIV", "GRP_KEY"]
+      },
+      "expectedResponseColumns": [
+        "IDX", "DIV", "GRP_KEY", "DOC_NUM", "DOC_NAME", "REG_DATE", "FILE_NAME", "FILE_NAME_OLD", "FILE_NAME_UPLOAD", "FILE_SIZE", "MEMO", "DOWN_COUNT", "CK_OPEN", "MUID", "MUNAME", "DELETEFLG", "DELETEDT", "DELETE_UID", "DELETE_UNAME", "SORT", "USR_DATE", "serial", "family", "_TABLENAME", "_SEQ", "_PNUMBER", "_FILENO"
+      ],
+      "validatedMatterReferences": ["PT261268", "P261793"],
+      "positiveResultMatterReferences": ["PT261268"],
+      "status": "cross-matter-live-validated"
     }
   ],
   "guarantees": {
@@ -99,8 +208,11 @@
     "mutationEnabled": false,
     "fixedP261793ProductionPolicyChanged": false,
     "genericMatterSummaryProductionEnabled": true,
-    "genericProgressProductionEnabled": false,
-    "genericDocumentsProductionEnabled": false,
-    "genericDownloadProductionEnabled": false
+    "genericApplicationNumberSearchProductionEnabled": true,
+    "genericProgressProductionEnabled": true,
+    "genericDocumentsProductionEnabled": true,
+    "genericProgressDocumentsProductionEnabled": true,
+    "genericDownloadProductionEnabled": true,
+    "genericPdfExtractionProductionEnabled": true
   }
 }

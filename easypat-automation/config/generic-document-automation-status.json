@@ -1,22 +1,34 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-16",
+  "updatedAt": "2026-09-18",
   "goal": "generalize progress, document listing, and selected-file download for exact full matter references",
   "genericProgress": {
-    "status": "offline-candidate-ready-live-cross-matter-validation-required",
-    "productionEnabled": false,
-    "mcpExposureEnabled": false,
+    "status": "cross-matter-and-mcp-live-validated",
+    "productionEnabled": true,
+    "mcpExposureEnabled": true,
     "identityChain": ["exact matter search", "server-returned matter idx", "progress idx_parent"],
     "safeProjectionFieldCount": 13,
-    "requiredNonBaselineMatterReferences": ["PT261129", "PT261130"]
+    "requiredNonBaselineMatterReferences": ["PT261129", "PT261130"],
+    "validatedProgressItemCounts": {
+      "PT261129": 1,
+      "PT261130": 1
+    },
+    "mcpLiveValidation": {
+      "matterReference": "PT261130",
+      "toolCount": 8,
+      "progressItemCount": 1,
+      "safeProjectionFieldCount": 13,
+      "rawValuesReturned": false,
+      "serverMutationPerformed": false
+    }
   },
   "genericDocuments": {
-    "status": "document-group-source-discovery-required",
-    "productionEnabled": false,
-    "mcpExposureEnabled": false,
+    "status": "cross-matter-and-mcp-live-validated-empty-results",
+    "productionEnabled": true,
+    "mcpExposureEnabled": true,
     "knownResponseColumnCount": 27,
     "knownSafeProjectionFields": ["position", "documentName", "registeredAt", "fileName", "fileSizeBytes"],
-    "blocker": "The zero-network baseline check disproved direct equality between the verified matter idx and the document GRP_KEY. A server-derived intermediate document-group identity must be found before parameterization.",
+    "blocker": null,
     "rejectedBinding": {
       "sourceTemplateId": "matter-search.exact-result.v1",
       "sourceColumn": "idx",
@@ -26,20 +38,52 @@
       "serverRequestsPerformed": 0
     },
     "baselineFilenameContainedMatterReference": false,
+    "rejectedCapturedChain": {
+      "sourceSessions": [231, 245, 247],
+      "sourceRequestConsumesDocumentGroup": true,
+      "sourceResponseProvidesIntermediateIdentity": true,
+      "intermediateResponseReturnsSameDocumentGroup": true,
+      "matterProgressRowMatchCount": 0,
+      "mainAndProgressDocumentGroupMatchCount": 0,
+      "classification": "shared-contract-document-chain-not-matter-bound"
+    },
+    "acceptedMatterBoundCandidate": {
+      "sourceSession": 9,
+      "templateId": "matter-detail.documents.matter-candidate.v1",
+      "sourceClassification": "matter-bound-document-candidate",
+      "matterIdentityPredicateColumns": ["GRP_KEY"],
+      "quarantinedGroupPredicateColumns": [],
+      "baselineResponseColumnCount": 27,
+      "baselineResponseRowCount": 0,
+      "encryptedTemplateStored": true,
+      "productionEnabled": false
+    },
+    "validatedNonBaselineMatterReferences": ["PT261129", "PT261130"],
+    "validatedDocumentItemCounts": {
+      "PT261129": 0,
+      "PT261130": 0
+    },
+    "mcpLiveValidation": {
+      "matterReference": "PT261130",
+      "toolCount": 8,
+      "documentItemCount": 0,
+      "progressDocumentDownloadEnabled": true,
+      "rawValuesReturned": false,
+      "serverMutationPerformed": false
+    },
     "callerSuppliedGroupKeyAllowed": false,
     "requiredEvidence": [
-      "inspect existing encrypted templates for a value-equality source without returning values",
-      "if absent, inspect captured read-only session 245 as the likely intermediate document-group source",
-      "derive the document group only from server responses bound to the exact full matter reference",
-      "verify the derivation on PT261129 and PT261130",
-      "verify every returned document row against the derived group and the exact 27-column schema"
+      "completed: verified the server-derived GRP_KEY binding on PT261129 and PT261130",
+      "completed: accepted empty lists only with the exact 27-column schema",
+      "future non-empty results must match every fixed predicate and the exact 27-column schema"
     ]
   },
   "genericDownload": {
-    "status": "offline-candidate-ready-depends-on-generic-document-live-validation",
-    "productionEnabled": false,
-    "mcpExposureEnabled": false,
-    "selectionInput": ["matterReference", "position", "expectedFileName"],
+    "status": "progress-document-download-live-and-mcp-validated",
+    "productionEnabled": true,
+    "mcpExposureEnabled": true,
+    "sourceTemplateId": "matter-detail.progress-documents.v1",
+    "selectionInput": ["matterReference", "progressDocument", "position", "expectedFileName"],
     "freshVerifiedDocumentListRequired": true,
     "sameOriginOnly": true,
     "maximumBytes": 67108864,
@@ -47,5 +91,64 @@
     "automaticRetryEnabled": false,
     "callerSuppliedUploadPathAllowed": false,
     "serverMutationEnabled": false
+  },
+  "progressAttachedDocuments": {
+    "status": "cross-matter-list-live-validated-positive-download-and-pdf-extraction",
+    "validatedMatterReferences": ["PT261268", "P261793"],
+    "positiveResultMatterReferences": ["PT261268"],
+    "progressDocument": "위임계약서 (x)",
+    "progressItemCount": 1,
+    "progressRowIdentityVerified": true,
+    "verifiedIntermediateIdxParentDocumentCount": 1,
+    "verifiedDocumentPredicateColumnCount": 4,
+    "legacyDocumentTemplateApplicable": false,
+    "downloadPerformed": true,
+    "downloadedFileSizeBytes": 221610,
+    "downloadedFileSha256": "002dc272a566509aa2e445ca8607e981b8eca73bbe919e4db40e1cceb8e0c657",
+    "pdfPageCount": 2,
+    "pdfExtractionEnabled": true,
+    "mcpToolCount": 8,
+    "productionEnabled": true,
+    "mcpExposureEnabled": true,
+    "nextEvidence": "validate another matter with a non-empty progress-document result"
+  },
+  "oaMatterAttachments": {
+    "status": "phase2-mcp-and-dry-run-live-validated",
+    "sourceTemplateId": "matter-detail.attachments.all.v1",
+    "sourceDerivation": "verified related-count attachment subquery",
+    "productionEnabled": true,
+    "mcpExposureEnabled": true,
+    "serverDownloadPerformed": false,
+    "serverMutationPerformed": false,
+    "automaticRetryEnabled": false,
+    "callerSuppliedSqlAllowed": false,
+    "callerSuppliedInternalIdentityAllowed": false,
+    "verifiedStoragePrefixes": ["upload/app", "upload/app_proc"],
+    "observedAdditionalExtensions": ["bib", "fin", "hlz", "dwg"],
+    "validatedMatters": {
+      "P261048": {"exactSearchCandidateCount": 2, "noticeDate": "2026-09-09", "dueDate": "2027-01-09", "aggregateAttachmentCount": 37, "verifiedAttachmentCount": 37, "noticePackageCount": 8},
+      "P261315": {"exactSearchCandidateCount": 2, "noticeDate": "2026-09-10", "dueDate": "2027-01-10", "aggregateAttachmentCount": 36, "verifiedAttachmentCount": 36, "noticePackageCount": 6},
+      "P261487": {"exactSearchCandidateCount": 1, "noticeDate": "2026-09-11", "dueDate": "2027-01-11", "aggregateAttachmentCount": 42, "verifiedAttachmentCount": 42, "noticePackageCount": 6},
+      "P261489": {"exactSearchCandidateCount": 1, "noticeDate": "2026-09-09", "dueDate": "2027-01-09", "aggregateAttachmentCount": 61, "verifiedAttachmentCount": 61, "noticePackageCount": 7},
+      "P261610": {"exactSearchCandidateCount": 2, "noticeDate": "2026-09-09", "dueDate": "2027-01-09", "aggregateAttachmentCount": 31, "verifiedAttachmentCount": 31, "noticePackageCount": 6}
+    },
+    "mcpLiveValidation": {
+      "toolCount": 8,
+      "validatedMatterCount": 5,
+      "serverUploadPathsReturned": false,
+      "internalIdentityReturned": false
+    },
+    "dryRun": {
+      "mailRecordCount": 10,
+      "candidateCount": 5,
+      "readyCount": 5,
+      "oaSequence": 1,
+      "attachmentCount": 33,
+      "destinationConflictCount": 0,
+      "databaseWritePerformed": false,
+      "downloadPerformed": false,
+      "zipCreated": false
+    },
+    "nextStage": "versioned staging download, file hash and ZIP verification, and no-overwrite intake publication"
   }
 }

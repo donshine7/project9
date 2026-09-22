@@ -38,6 +38,52 @@ import { analysisStatus, reviewCandidate } from './lib/analysis';
 import { recordAuditFeedback } from './lib/audit-feedback';
 import { recordGroupReviewFeedback } from './lib/group-review';
 import { addWikiEntry, reviewWiki, wikiDetail, wikiEvidence, wikiIndex } from './lib/wiki';
+import {
+  completeWorkRefreshStage,
+  createWorkRefresh,
+  failWorkRefreshStage,
+  finalizeWorkRefresh,
+  getWorkRefresh,
+  listWorkRefreshes,
+  recordWorkRefreshResult,
+  setWorkRefreshStageInputCount,
+  startWorkRefreshStage,
+} from './lib/work-refresh';
+import {
+  createNoticeProject,
+  getDownloadJobEvents,
+  getDownloadNotice,
+  getDownloadSummary,
+  listDetectionRuns,
+  listDownloadNotices,
+  linkExistingNoticeProject,
+  previewNoticeProject,
+  requestJobResume,
+  requestNoticeOperation,
+} from './lib/notice-downloads';
+import {
+  completeResponseStage,
+  getResponseProject,
+  getResponseSummary,
+  linkResponseTask,
+  listResponseProjects,
+  reconcileResponseProject,
+  recordResponseApproval,
+} from './lib/notice-response-projects';
+import {
+  confirmSpecificationSetupStep,
+  createSpecificationSetup,
+  getSpecificationProject,
+  getSpecificationSetup,
+  getSpecificationSummary,
+  initializeSpecificationSetup,
+  listSpecificationChecks,
+  listSpecificationProjects,
+  listSpecificationSetups,
+  previewSpecificationSetup,
+  runSpecificationCheck,
+  verifySpecificationSetup,
+} from './lib/specification-projects';
 
 const execFileAsync = promisify(execFile);
 const PROJECT_ROOT = path.resolve('C:\\ChatGPT\\AI-Work\\10_특허\\한국특허가출원');
@@ -302,21 +348,92 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
   const entityNoteRoute = pathname.match(/^\/api\/(matters|organizations|people|groups)\/([^/]+)\/note$/);
   const groupTypeRoute = pathname.match(/^\/api\/groups\/([^/]+)\/type$/);
   const organizationBusinessTypeRoute = pathname.match(/^\/api\/organizations\/([^/]+)\/business-type$/);
+  const workRefreshRoute = pathname.match(/^\/api\/work-refresh\/([^/]+)$/);
+  const workRefreshStageCreateRoute = pathname.match(/^\/api\/work-refresh\/([^/]+)\/stages$/);
+  const workRefreshStageRoute = pathname.match(/^\/api\/work-refresh\/stages\/([^/]+)$/);
+  const workRefreshResultRoute = pathname.match(/^\/api\/work-refresh\/([^/]+)\/results$/);
+  const workRefreshFinalizeRoute = pathname.match(/^\/api\/work-refresh\/([^/]+)\/finalize$/);
+  const downloadNoticeRoute = pathname.match(/^\/api\/downloads\/notices\/([^/]+)$/);
+  const downloadNoticeRecheckRoute = pathname.match(/^\/api\/downloads\/notices\/([^/]+)\/recheck-requests$/);
+  const downloadNoticePreviewRoute = pathname.match(/^\/api\/downloads\/notices\/([^/]+)\/project-previews$/);
+  const downloadNoticeProjectRoute = pathname.match(/^\/api\/downloads\/notices\/([^/]+)\/projects$/);
+  const downloadNoticeProjectLinkRoute = pathname.match(/^\/api\/downloads\/notices\/([^/]+)\/project-links$/);
+  const downloadJobEventsRoute = pathname.match(/^\/api\/downloads\/jobs\/([^/]+)\/events$/);
+  const downloadJobResumeRoute = pathname.match(/^\/api\/downloads\/jobs\/([^/]+)\/resume-requests$/);
+  const responseProjectRoute = pathname.match(/^\/api\/responses\/projects\/([^/]+)$/);
+  const responseReconcileRoute = pathname.match(/^\/api\/responses\/projects\/([^/]+)\/reconcile$/);
+  const responseStageRoute = pathname.match(/^\/api\/responses\/projects\/([^/]+)\/stages\/(\d+)\/complete$/);
+  const responseApprovalRoute = pathname.match(/^\/api\/responses\/projects\/([^/]+)\/approvals$/);
+  const responseTaskRoute = pathname.match(/^\/api\/responses\/projects\/([^/]+)\/task-links$/);
+  const specificationProjectRoute = pathname.match(/^\/api\/specifications\/projects\/([^/]+)$/);
+  const specificationCheckRoute = pathname.match(/^\/api\/specifications\/projects\/([^/]+)\/checks$/);
+  const specificationSetupRoute = pathname.match(/^\/api\/specifications\/setups\/([^/]+)$/);
+  const specificationSetupActionRoute = pathname.match(/^\/api\/specifications\/setups\/([^/]+)\/(preview|initialize|confirm|verify)$/);
   const relevant = pathname === '/api/work-db/status'
     || pathname === '/api/work-db/backup'
     || pathname === '/api/work-db/restore'
     || pathname === '/api/matters'
     || pathname === '/api/mail-sync'
+    || pathname === '/api/work-refresh'
     || pathname === '/api/analysis'
     || pathname === '/api/analysis/group-feedback'
+    || pathname === '/api/downloads/summary'
+    || pathname === '/api/downloads/runs'
+    || pathname === '/api/downloads/notices'
+    || pathname === '/api/responses/summary'
+    || pathname === '/api/responses/projects'
+    || pathname === '/api/specifications/summary'
+    || pathname === '/api/specifications/projects'
+    || pathname === '/api/specifications/setups'
     || Boolean(analysisReviewRoute)
     || Boolean(analysisFeedbackRoute)
     || pathname === '/api/wiki'
     || Boolean(wikiRoute || wikiReviewRoute || wikiEvidenceRoute)
+    || Boolean(workRefreshRoute || workRefreshStageCreateRoute || workRefreshStageRoute || workRefreshResultRoute || workRefreshFinalizeRoute)
+    || Boolean(downloadNoticeRoute || downloadNoticeRecheckRoute || downloadNoticePreviewRoute || downloadNoticeProjectRoute || downloadNoticeProjectLinkRoute || downloadJobEventsRoute || downloadJobResumeRoute)
+    || Boolean(responseProjectRoute || responseReconcileRoute || responseStageRoute || responseApprovalRoute || responseTaskRoute)
+    || Boolean(specificationProjectRoute || specificationCheckRoute || specificationSetupRoute || specificationSetupActionRoute)
     || Boolean(matterRoute || matterChildRoute || relationRoute || entityRoute || entityNoteRoute || groupTypeRoute || organizationBusinessTypeRoute);
   if (!relevant) return null;
 
   try {
+    if (req.method === 'GET' && pathname === '/api/specifications/summary') return { status: 200, payload: await getSpecificationSummary() };
+    if (req.method === 'GET' && pathname === '/api/specifications/projects') return { status: 200, payload: await listSpecificationProjects({ q: requestUrl.searchParams.get('q'), serviceType: requestUrl.searchParams.get('serviceType'), stage: requestUrl.searchParams.get('stage'), userAction: requestUrl.searchParams.get('userAction') }) };
+    if (req.method === 'GET' && pathname === '/api/specifications/setups') return { status: 200, payload: listSpecificationSetups(requestUrl.searchParams.get('limit')) };
+    if (req.method === 'POST' && pathname === '/api/specifications/setups') return { status: 201, payload: createSpecificationSetup(await readBody(req, 32 * 1024)) };
+    if (req.method === 'GET' && specificationProjectRoute && !specificationCheckRoute) return { status: 200, payload: await getSpecificationProject(decodeURIComponent(specificationProjectRoute[1])) };
+    if (req.method === 'GET' && specificationCheckRoute) return { status: 200, payload: listSpecificationChecks(decodeURIComponent(specificationCheckRoute[1])) };
+    if (req.method === 'POST' && specificationCheckRoute) return { status: 201, payload: await runSpecificationCheck(decodeURIComponent(specificationCheckRoute[1])) };
+    if (req.method === 'GET' && specificationSetupRoute && !specificationSetupActionRoute) return { status: 200, payload: getSpecificationSetup(decodeURIComponent(specificationSetupRoute[1])) };
+    if (req.method === 'POST' && specificationSetupActionRoute) {
+      const setupId = decodeURIComponent(specificationSetupActionRoute[1]);
+      const action = specificationSetupActionRoute[2];
+      if (action === 'preview') return { status: 200, payload: await previewSpecificationSetup(setupId) };
+      if (action === 'initialize') return { status: 201, payload: await initializeSpecificationSetup(setupId, await readBody(req, 16 * 1024)) };
+      if (action === 'confirm') return { status: 200, payload: await confirmSpecificationSetupStep(setupId, await readBody(req, 16 * 1024)) };
+      return { status: 200, payload: await verifySpecificationSetup(setupId, await readBody(req, 16 * 1024)) };
+    }
+    if (req.method === 'GET' && pathname === '/api/downloads/summary') return { status: 200, payload: getDownloadSummary() };
+    if (req.method === 'GET' && pathname === '/api/downloads/runs') return { status: 200, payload: { runs: listDetectionRuns(requestUrl.searchParams.get('limit') ?? 20) } };
+    if (req.method === 'GET' && pathname === '/api/downloads/notices') {
+      return { status: 200, payload: listDownloadNotices({ q: requestUrl.searchParams.get('q'), kind: requestUrl.searchParams.get('kind'), status: requestUrl.searchParams.get('status'), limit: requestUrl.searchParams.get('limit'), offset: requestUrl.searchParams.get('offset') }) };
+    }
+    if (req.method === 'GET' && downloadNoticeRoute) return { status: 200, payload: getDownloadNotice(decodeURIComponent(downloadNoticeRoute[1])) };
+    if (req.method === 'GET' && downloadJobEventsRoute) return { status: 200, payload: { events: getDownloadJobEvents(decodeURIComponent(downloadJobEventsRoute[1])) } };
+    if (req.method === 'POST' && downloadNoticeRecheckRoute) return { status: 202, payload: requestNoticeOperation(decodeURIComponent(downloadNoticeRecheckRoute[1]), 'recheck', await readBody(req, 16 * 1024)) };
+    if (req.method === 'POST' && downloadJobResumeRoute) return { status: 202, payload: requestJobResume(decodeURIComponent(downloadJobResumeRoute[1]), await readBody(req, 16 * 1024)) };
+    if (req.method === 'POST' && downloadNoticePreviewRoute) return { status: 200, payload: await previewNoticeProject(decodeURIComponent(downloadNoticePreviewRoute[1]), await readBody(req, 16 * 1024)) };
+    if (req.method === 'POST' && downloadNoticeProjectRoute) return { status: 201, payload: await createNoticeProject(decodeURIComponent(downloadNoticeProjectRoute[1]), await readBody(req, 16 * 1024)) };
+    if (req.method === 'POST' && downloadNoticeProjectLinkRoute) return { status: 200, payload: await linkExistingNoticeProject(decodeURIComponent(downloadNoticeProjectLinkRoute[1]), await readBody(req, 16 * 1024)) };
+    if (req.method === 'GET' && pathname === '/api/responses/summary') return { status: 200, payload: getResponseSummary() };
+    if (req.method === 'GET' && pathname === '/api/responses/projects') {
+      return { status: 200, payload: listResponseProjects({ q: requestUrl.searchParams.get('q'), kind: requestUrl.searchParams.get('kind'), stage: requestUrl.searchParams.get('stage'), userAction: requestUrl.searchParams.get('userAction'), limit: requestUrl.searchParams.get('limit'), offset: requestUrl.searchParams.get('offset') }) };
+    }
+    if (req.method === 'GET' && responseProjectRoute) return { status: 200, payload: getResponseProject(decodeURIComponent(responseProjectRoute[1])) };
+    if (req.method === 'POST' && responseReconcileRoute) return { status: 200, payload: await reconcileResponseProject(decodeURIComponent(responseReconcileRoute[1]), await readBody(req, 16 * 1024)) };
+    if (req.method === 'POST' && responseStageRoute) return { status: 200, payload: await completeResponseStage(decodeURIComponent(responseStageRoute[1]), responseStageRoute[2], await readBody(req, 16 * 1024)) };
+    if (req.method === 'POST' && responseApprovalRoute) return { status: 201, payload: await recordResponseApproval(decodeURIComponent(responseApprovalRoute[1]), await readBody(req, 32 * 1024)) };
+    if (req.method === 'POST' && responseTaskRoute) return { status: 201, payload: await linkResponseTask(decodeURIComponent(responseTaskRoute[1]), await readBody(req, 16 * 1024)) };
     if (groupTypeRoute && req.method === 'PATCH') {
       const body = await readBody(req);
       return { status: 200, payload: updateGroupType(decodeURIComponent(groupTypeRoute[1]), body.groupType, body.expectedVersion) };
@@ -351,6 +468,21 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     if (req.method === 'GET' && pathname === '/api/matters') {
       return { status: 200, payload: { matters: listMatters(requestUrl.searchParams.get('q') ?? '') } };
     }
+    if (req.method === 'GET' && pathname === '/api/work-refresh') return { status: 200, payload: { runs: listWorkRefreshes(requestUrl.searchParams.get('limit') ?? 20) } };
+    if (req.method === 'POST' && pathname === '/api/work-refresh') return { status: 201, payload: createWorkRefresh(await readBody(req, 64 * 1024)) };
+    if (req.method === 'GET' && workRefreshRoute) return { status: 200, payload: getWorkRefresh(decodeURIComponent(workRefreshRoute[1])) };
+    if (req.method === 'POST' && workRefreshStageCreateRoute) {
+      const body = await readBody(req, 64 * 1024);
+      return { status: 201, payload: startWorkRefreshStage(decodeURIComponent(workRefreshStageCreateRoute[1]), body.stageKey, body.inputCount) };
+    }
+    if (req.method === 'PATCH' && workRefreshStageRoute) {
+      const body = await readBody(req, 64 * 1024), stageId = decodeURIComponent(workRefreshStageRoute[1]);
+      if (body.action === 'complete') return { status: 200, payload: completeWorkRefreshStage(stageId, body) };
+      if (body.action === 'fail') return { status: 200, payload: failWorkRefreshStage(stageId, body.errorCode) };
+      throw new WorkDbError('단계 처리 동작은 complete 또는 fail이어야 합니다.', 400);
+    }
+    if (req.method === 'POST' && workRefreshResultRoute) return { status: 201, payload: recordWorkRefreshResult(decodeURIComponent(workRefreshResultRoute[1]), await readBody(req, 64 * 1024)) };
+    if (req.method === 'POST' && workRefreshFinalizeRoute) return { status: 200, payload: finalizeWorkRefresh(decodeURIComponent(workRefreshFinalizeRoute[1])) };
     if (req.method === 'GET' && pathname === '/api/mail-sync') return { status: 200, payload: { runs: listSyncRuns() } };
     if (req.method === 'POST' && pathname === '/api/mail-sync') return { status: 200, payload: await syncOutlookMail(await readBody(req, 64 * 1024)) };
     if (req.method === 'POST' && pathname === '/api/matters') {
@@ -411,6 +543,7 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
 }
 
 async function syncOutlookMail(body: any) {
+  const requestedAt = new Date().toISOString();
   const mode = ['day', 'week', 'range'].includes(body?.mode) ? body.mode : 'day';
   const to = new Date();
   let from: Date;
@@ -431,14 +564,22 @@ async function syncOutlookMail(body: any) {
   await mkdir(stagingRoot, { recursive: true });
   const outputPath = path.join(stagingRoot, `outlook-${randomUUID()}.json`);
   const scriptPath = path.resolve(process.cwd(), 'scripts', 'Export-OutlookMail.ps1');
-  if (!(await exists(scriptPath))) throw new WorkDbError('Outlook 읽기 스크립트를 찾을 수 없습니다.', 500);
+  const refresh = createWorkRefresh({ requestChannel: 'dashboard', requestedBy: '장진태', requestedAt, mailWindowFrom: from.toISOString(), mailWindowTo: to.toISOString() });
+  const collectionStage = startWorkRefreshStage(refresh.id, 'collection', 0);
   try {
+    if (!(await exists(scriptPath))) throw new WorkDbError('Outlook 읽기 스크립트를 찾을 수 없습니다.', 500);
     await execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-From', from.toISOString(), '-To', to.toISOString(), '-OutputPath', outputPath], { cwd: process.cwd(), shell: false, windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 });
     const extracted = JSON.parse((await readFile(outputPath, 'utf8')).replace(/^\uFEFF/, '')) as { records?: OutlookMailRecord[]; folders?: string[]; excludedFolders?: string[] };
     const records = Array.isArray(extracted.records) ? extracted.records : [];
-    const imported = importOutlookMail(records, { from: from.toISOString(), to: to.toISOString(), folders: extracted.folders || [] });
-    return { ...imported, from: from.toISOString(), to: to.toISOString(), folders: extracted.folders || [], excludedFolders: extracted.excludedFolders || [] };
+    setWorkRefreshStageInputCount(collectionStage.id, records.length);
+    const imported = importOutlookMail(records, {
+      from: from.toISOString(), to: to.toISOString(), folders: extracted.folders || [],
+      workRefreshRunId: refresh.id, workRefreshStageId: collectionStage.id,
+    });
+    completeWorkRefreshStage(collectionStage.id, { processedCount: imported.received, outputCount: imported.imported, result: { syncId: imported.syncId, folders: extracted.folders || [], excludedFolders: extracted.excludedFolders || [] } });
+    return { ...imported, workRefreshRunId: refresh.id, refresh: getWorkRefresh(refresh.id), from: from.toISOString(), to: to.toISOString(), folders: extracted.folders || [], excludedFolders: extracted.excludedFolders || [] };
   } catch (error: any) {
+    try { failWorkRefreshStage(collectionStage.id, error?.code || 'OUTLOOK_SYNC_FAILED'); } catch { /* preserve the original collection error */ }
     if (error instanceof WorkDbError) throw error;
     throw new WorkDbError(error?.stderr || error?.message || 'Outlook 메일 수집에 실패했습니다.', 500, 'OUTLOOK_SYNC_FAILED');
   } finally {

@@ -30,17 +30,22 @@ const candidates = analysisStatus().candidates.filter(c => c.run_id === runId);
 if (!candidates.length || candidates.some(c => c.kind !== 'link' || Object.keys(c.payload.fields).join() !== 'matterRef')) throw Error('Run is not a pure mail-link review');
 const candidateHash = hash(candidates);
 if (rehearsal && (rehearsal.baselineHash !== before || rehearsal.oldLinksHash !== hash(oldLinks) || rehearsal.candidateHash !== candidateHash)) throw Error('Data changed since rehearsal');
-const accepted = [], held = [];
+const accepted: Array<{ candidateId: string; mailId: string; matterRef: string; matterId: string; preexisting: boolean; result: unknown }> = [], held = [];
 for (const c of candidates) {
   if (c.review_status !== 'pending' || !c.verifications.length || c.verifications.some((v: {value: string}) => v.value !== 'confirmed')) {
     held.push({ id: c.id, reason: 'not_pending_or_not_independently_confirmed' }); continue;
   }
-  const matter = withDatabase(db => db.prepare('SELECT id FROM matter WHERE our_ref=? AND archived_at IS NULL').get(c.payload.fields.matterRef.value));
-  if (!matter || oldLinks.some(l => l.mail_id === c.entity_id && l.matter_id === matter.id)) throw Error('Link target stale or already linked');
-  accepted.push({ candidateId: c.id, mailId: c.entity_id, matterRef: c.payload.fields.matterRef.value, matterId: matter.id, result: reviewCandidate(c.id, { action: 'accept', expectedVersion: c.row_version, reason }) });
+  const matter = withDatabase(db => db.prepare('SELECT id FROM matter WHERE our_ref=? AND archived_at IS NULL').get(c.payload.fields.matterRef.value) as { id: string } | undefined);
+  if (!matter) throw Error('Link target stale');
+  const preexisting = oldLinks.some(l => l.mail_id === c.entity_id && l.matter_id === matter.id);
+  accepted.push({ candidateId: c.id, mailId: c.entity_id, matterRef: c.payload.fields.matterRef.value, matterId: matter.id, preexisting, result: reviewCandidate(c.id, { action: 'accept', expectedVersion: c.row_version, reason }) });
 }
 const afterLinks = links();
-if (before !== hash(protectedState()) || oldLinks.some(l => !afterLinks.some(a => hash(a) === hash(l))) || afterLinks.length !== oldLinks.length + accepted.length) throw Error('Unexpected business-data change; inspect backup');
+const acceptedPairs = new Set(accepted.map(item => `${item.mailId}\u0000${item.matterId}`));
+const unchangedOldLinks = oldLinks.filter(link => !acceptedPairs.has(`${link.mail_id}\u0000${link.matter_id}`));
+const insertedCount = accepted.filter(item => !item.preexisting).length;
+const acceptedLinksValid = accepted.every(item => afterLinks.some(link => link.mail_id === item.mailId && link.matter_id === item.matterId && link.match_source === 'user_input' && link.confidence === 1));
+if (before !== hash(protectedState()) || unchangedOldLinks.some(l => !afterLinks.some(a => hash(a) === hash(l))) || afterLinks.length !== oldLinks.length + insertedCount || !acceptedLinksValid) throw Error('Unexpected business-data change; inspect backup');
 const integrity = withDatabase(db => ({ check: db.prepare('PRAGMA integrity_check').get(), foreignKeys: db.prepare('PRAGMA foreign_key_check').all() }));
 if (JSON.stringify(integrity.check) !== '{"integrity_check":"ok"}' || integrity.foreignKeys.length) throw Error('Database integrity failed');
 const report = { mode, runId, backup: backup.file, clone, accepted, held, beforeLinks: oldLinks.length, afterLinks: afterLinks.length, baselineHash: before, oldLinksHash: hash(oldLinks), candidateHash, protectedDataUnchanged: true, integrity };

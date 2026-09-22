@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { matterReferenceTokens, parseMatterNumber } from './matter-number';
+import { loadSourcePriorityPolicy, SOURCE_PRIORITY_VERSION } from './source-policy';
 
-export const SOURCE_TYPES = ['user_input', 'registration_mail', 'excel', 'mail_inference', 'easy_pat'] as const;
+export const SOURCE_TYPES = ['user_input', 'easy_pat', 'registration_mail', 'excel', 'mail_inference'] as const;
 export const WORK_TYPES = ['출원', '중간사건', '등록', '기타'] as const;
 export const SERVICE_TYPES = ['일반출원', '우선심사출원', '메이킹', '기획', '가출원'] as const;
 export const ACTION_STATUSES = ['대기', '진행중', '완료', '보류'] as const;
@@ -80,6 +81,8 @@ export type OutlookMailRecord = {
   senderEmail?: string | null;
   to?: string | null;
   cc?: string | null;
+  storeDisplayName?: string | null;
+  recipients?: Array<{ type?: string; displayName?: string | null; smtpAddress?: string | null; resolved?: boolean }>;
   mailAt: string;
   body: string;
 };
@@ -128,14 +131,22 @@ function migrate(db: DatabaseSync) {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = readFileSync(path.join(directory, file), 'utf8');
+    const foreignKeysOff = /^\s*--\s*@foreign-keys-off\b/m.test(sql);
+    if (foreignKeysOff) db.exec('PRAGMA foreign_keys = OFF;');
     db.exec('BEGIN IMMEDIATE');
     try {
       db.exec(sql);
+      if (foreignKeysOff) {
+        const violations = db.prepare('PRAGMA foreign_key_check').all();
+        if (violations.length) throw new Error(`Migration ${file} left ${violations.length} foreign-key violation(s).`);
+      }
       db.prepare('INSERT INTO schema_migration(version, applied_at) VALUES (?, ?)').run(file, now());
       db.exec('COMMIT');
     } catch (error) {
       db.exec('ROLLBACK');
       throw error;
+    } finally {
+      if (foreignKeysOff) db.exec('PRAGMA foreign_keys = ON;');
     }
   }
 }
@@ -370,8 +381,11 @@ function getMatterFromDb(db: DatabaseSync, id: string) {
     ORDER BY g.group_ref
   `).all(id) as Array<Record<string, unknown>>).map(groupRow);
   const mailSummaries = db.prepare(`SELECT id, summary_date AS summaryDate, content, summary_type AS summaryType, model, source_mail_ids_json AS sourceMailIdsJson, row_version AS rowVersion, updated_at AS updatedAt FROM mail_daily_summary WHERE matter_id = ? ORDER BY summary_date DESC LIMIT 90`).all(id).map((row: any) => ({ ...row, sourceMailIds: parseJson(row.sourceMailIdsJson, []) }));
+  const easyPatObservations = (db.prepare(`SELECT id,field_path AS fieldPath,observed_value_json AS observedValueJson,source_id AS sourceId,observed_at AS observedAt,confidence FROM source_observation WHERE entity_type='matter' AND entity_id=? AND source_type='easy_pat' ORDER BY observed_at DESC,rowid DESC LIMIT 50`).all(id) as Array<Record<string, unknown>>)
+    .map((row) => ({ ...row, observedValue: parseJson(String(row.observedValueJson), null) })) as Array<{ id: string; fieldPath: string; observedValue: unknown; sourceId: string; observedAt: string; confidence: number }>;
+  const easyPat = { verified: easyPatObservations.length > 0, lastObservedAt: easyPatObservations[0]?.observedAt || null, observations: easyPatObservations };
   const events = (db.prepare('SELECT id, entity_type AS entityType, entity_id AS entityId, event_type AS eventType, actor, source_type AS sourceType, created_at AS createdAt FROM event WHERE (entity_type = \'matter\' AND entity_id = ?) OR entity_id IN (SELECT id FROM work_item WHERE matter_id = ?) OR entity_id IN (SELECT id FROM action_item WHERE matter_id = ?) OR entity_id IN (SELECT id FROM matter_note WHERE matter_id = ?) ORDER BY created_at DESC LIMIT 50').all(id, id, id, id));
-  return { matter: matterRow(matter), works, notes, actions, organizations, people, groups, mailSummaries, events };
+  return { matter: matterRow(matter), works, notes, actions, organizations, people, groups, mailSummaries, easyPat, events };
 }
 
 export function createMatter(input: MatterCreateInput) {
@@ -824,19 +838,20 @@ export function importConfirmedMatterGroups(input: ConfirmedGroupImport) {
 
     const runId = randomUUID();
     const snapshotId = randomUUID();
-    const policyId = 'group-reconciliation-v1';
-    const policyHash = createHash('sha256').update('group-reconciliation-v1:easy-pat>excel>registration-mail').digest('hex');
+    const sourcePolicy = loadSourcePriorityPolicy();
+    const policyId = 'group-reconciliation-v2';
+    const policyHash = createHash('sha256').update(`group-reconciliation-v2:${sourcePolicy.externalPriority.join('>')}:${sourcePolicy.contentHash}`).digest('hex');
     const entityVersions: Record<string, number> = {};
     for (const ref of new Set(groups.flatMap((group) => group.members))) {
       const existing = db.prepare('SELECT id,row_version FROM matter WHERE our_ref=? COLLATE NOCASE AND archived_at IS NULL').get(ref) as { id: string; row_version: number } | undefined;
       if (existing) entityVersions[`matter:${existing.id}`] = existing.row_version;
     }
-    db.prepare(`INSERT OR IGNORE INTO policy_revision(id,revision_type,version,artifact_paths_json,content_hash,status,created_at) VALUES (?,'workflow','group-reconciliation-v1',? ,?,'active',?)`)
-      .run(policyId, JSON.stringify(['docs/WORK_MANAGEMENT_ARCHITECTURE.md', 'docs/DECISION_FEEDBACK_DESIGN.md']), policyHash, timestamp);
-    db.prepare(`INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,'[]',?,'easy-pat-excel-registration-mail-v1',?,?,?)`)
-      .run(snapshotId, JSON.stringify(entityVersions), contextHash, contextJson, timestamp);
-    db.prepare(`INSERT INTO decision_run(id,operation,agent_name,prompt_version,policy_revision_id,routing_snapshot_json,input_snapshot_id,status,started_at) VALUES (?,'group_reconciliation','deterministic_group_reconciler','group-reconciliation-v1',?,? ,?,'started',?)`)
-      .run(runId, policyId, JSON.stringify({ method: 'deterministic', sourcePriority: ['easy_pat', 'excel', 'registration_mail'], model: null, effort: null }), snapshotId, timestamp);
+    db.prepare(`INSERT OR IGNORE INTO policy_revision(id,revision_type,version,artifact_paths_json,content_hash,status,created_at) VALUES (?,'workflow','group-reconciliation-v2',? ,?,'active',?)`)
+      .run(policyId, JSON.stringify(['config/source-priority.toml', 'docs/WORK_MANAGEMENT_ARCHITECTURE.md', 'docs/DECISION_FEEDBACK_DESIGN.md']), policyHash, timestamp);
+    db.prepare(`INSERT INTO input_snapshot(id,mail_ids_json,entity_versions_json,source_priority_version,context_hash,context_json,created_at) VALUES (?,'[]',?,?,?,?,?)`)
+      .run(snapshotId, JSON.stringify(entityVersions), SOURCE_PRIORITY_VERSION, contextHash, contextJson, timestamp);
+    db.prepare(`INSERT INTO decision_run(id,operation,agent_name,prompt_version,policy_revision_id,routing_snapshot_json,input_snapshot_id,status,started_at) VALUES (?,'group_reconciliation','deterministic_group_reconciler','group-reconciliation-v2',?,? ,?,'started',?)`)
+      .run(runId, policyId, JSON.stringify({ method: 'deterministic', sourcePriority: sourcePolicy.externalPriority, userConfirmedProtected: true, model: null, effort: null }), snapshotId, timestamp);
 
     let createdGroups = 0;
     let createdMatters = 0;
@@ -969,32 +984,74 @@ function rebuildDailySummary(db: DatabaseSync, matterId: string, summaryDate: st
   else db.prepare(`INSERT INTO mail_daily_summary(id, matter_id, summary_date, content, source_mail_ids_json, summary_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'deterministic', ?, ?)`).run(randomUUID(), matterId, summaryDate, content, JSON.stringify(sourceIds), timestamp, timestamp);
 }
 
-export function importOutlookMail(records: OutlookMailRecord[], range: { from: string; to: string; folders: string[] }) {
+export function importOutlookMail(records: OutlookMailRecord[], range: {
+  from: string;
+  to: string;
+  folders: string[];
+  workRefreshRunId?: string;
+  workRefreshStageId?: string;
+}) {
   return withDatabase((db) => transaction(db, () => {
     const syncId = randomUUID();
     const startedAt = now();
-    db.prepare(`INSERT INTO sync_run(id, requested_from, requested_to, folder_scope_json, status, started_at) VALUES (?, ?, ?, ?, 'running', ?)`).run(syncId, range.from, range.to, JSON.stringify(range.folders), startedAt);
+    const tracked = Boolean(range.workRefreshRunId || range.workRefreshStageId);
+    if (tracked && (!range.workRefreshRunId || !range.workRefreshStageId)) throw new WorkDbError('업무 정리 실행과 수집 단계 ID를 함께 지정하세요.', 400);
+    if (tracked) {
+      const stage = db.prepare(`
+        SELECT s.stage_key,s.status,r.mail_window_from,r.mail_window_to
+        FROM work_refresh_stage s JOIN work_refresh_run r ON r.id=s.work_refresh_run_id
+        WHERE s.id=? AND s.work_refresh_run_id=?
+      `).get(range.workRefreshStageId!, range.workRefreshRunId!) as Record<string, unknown> | undefined;
+      if (!stage || stage.stage_key !== 'collection' || stage.status !== 'running') throw new WorkDbError('실행 중인 메일 수집 단계가 아닙니다.', 409, 'WORK_REFRESH_COLLECTION_STATE');
+      if (stage.mail_window_from !== new Date(range.from).toISOString() || stage.mail_window_to !== new Date(range.to).toISOString()) throw new WorkDbError('업무 정리 실행과 수집 기간이 일치하지 않습니다.', 409, 'WORK_REFRESH_RANGE_MISMATCH');
+    }
+    db.prepare(`
+      INSERT INTO sync_run(
+        id,requested_from,requested_to,folder_scope_json,status,started_at,work_refresh_run_id,work_refresh_stage_id
+      ) VALUES (?, ?, ?, ?, 'running', ?, ?, ?)
+    `).run(syncId, range.from, range.to, JSON.stringify(range.folders), startedAt, range.workRefreshRunId ?? null, range.workRefreshStageId ?? null);
     let imported = 0;
     let skipped = 0;
     let linked = 0;
+    let targeted = 0;
     const affected = new Set<string>();
     for (const raw of records) {
       const entryId = requiredText(raw.entryId, 'Outlook EntryID', 1_000);
-      if (db.prepare('SELECT id FROM mail_item WHERE outlook_entry_id = ?').get(entryId)) { skipped += 1; continue; }
-      const mailId = randomUUID();
+      const existingMail = db.prepare('SELECT id FROM mail_item WHERE outlook_entry_id = ?').get(entryId) as { id?: string } | undefined;
+      let mailId = existingMail?.id ?? randomUUID();
       const subject = String(raw.subject || '').trim().slice(0, 1_000);
       const body = String(raw.body || '').slice(0, 100_000);
       const mailAt = new Date(raw.mailAt).toISOString();
-      const bodyHash = createHash('sha256').update(body).digest('hex');
-      db.prepare(`INSERT INTO mail_item(id, outlook_entry_id, internet_message_id, conversation_id, folder_path, direction, subject, sender_name, sender_email, recipients_json, mail_at, body_text, body_hash, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(mailId, entryId, raw.internetMessageId || null, raw.conversationId || null, raw.folderPath, raw.direction, subject || '(제목 없음)', raw.senderName || null, raw.senderEmail || null, JSON.stringify({ to: raw.to || null, cc: raw.cc || null }), mailAt, body, bodyHash, startedAt);
-      imported += 1;
-      for (const match of findMatterRefs(subject, newMessageBody(body))) {
-        const matterId = ensureMailMatter(db, match.ref, match.source, mailId, startedAt);
-        const confidence = match.source === 'subject' ? 0.85 : 0.7;
-        const result = db.prepare('INSERT OR IGNORE INTO mail_matter_link(mail_id, matter_id, match_source, confidence, created_at) VALUES (?, ?, ?, ?, ?)').run(mailId, matterId, match.source, confidence, startedAt);
-        if (Number(result.changes)) linked += 1;
-        affected.add(`${matterId}|${mailAt.slice(0, 10)}`);
+      if (existingMail?.id) skipped += 1;
+      else {
+        const bodyHash = createHash('sha256').update(body).digest('hex');
+        const recipients = Array.isArray(raw.recipients) ? raw.recipients.slice(0, 200).map((recipient) => ({
+          type: ['to', 'cc', 'bcc'].includes(String(recipient?.type).toLowerCase()) ? String(recipient.type).toLowerCase() : 'unknown',
+          displayName: String(recipient?.displayName ?? '').trim().slice(0, 300) || null,
+          smtpAddress: String(recipient?.smtpAddress ?? '').trim().toLowerCase().slice(0, 320) || null,
+          resolved: Boolean(recipient?.resolved),
+        })) : [];
+        const recipientEvidence = { to: raw.to || null, cc: raw.cc || null, storeDisplayName: raw.storeDisplayName || null, recipients };
+        const recipientSnapshotHash = createHash('sha256').update(JSON.stringify(recipientEvidence)).digest('hex');
+        db.prepare(`INSERT INTO mail_item(id, outlook_entry_id, internet_message_id, conversation_id, folder_path, direction, subject, sender_name, sender_email, recipients_json, mail_at, body_text, body_hash, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(mailId, entryId, raw.internetMessageId || null, raw.conversationId || null, raw.folderPath, raw.direction, subject || '(제목 없음)', raw.senderName || null, raw.senderEmail || null, JSON.stringify({ ...recipientEvidence, recipientSnapshotHash }), mailAt, body, bodyHash, startedAt);
+        imported += 1;
+        for (const match of findMatterRefs(subject, newMessageBody(body))) {
+          const matterId = ensureMailMatter(db, match.ref, match.source, mailId, startedAt);
+          const confidence = match.source === 'subject' ? 0.85 : 0.7;
+          const result = db.prepare('INSERT OR IGNORE INTO mail_matter_link(mail_id, matter_id, match_source, confidence, created_at) VALUES (?, ?, ?, ?, ?)').run(mailId, matterId, match.source, confidence, startedAt);
+          if (Number(result.changes)) linked += 1;
+          affected.add(`${matterId}|${mailAt.slice(0, 10)}`);
+        }
+      }
+      if (tracked) {
+        const result = db.prepare(`INSERT OR IGNORE INTO work_refresh_mail(
+          work_refresh_run_id,mail_id,source_sync_run_id,review_status,created_at,updated_at
+        ) VALUES (?,?,?,'pending',?,?)`).run(range.workRefreshRunId!, mailId, syncId, startedAt, startedAt);
+        if (Number(result.changes)) targeted += 1;
+        else db.prepare(`UPDATE work_refresh_mail SET
+          source_sync_run_id=COALESCE(source_sync_run_id,?),updated_at=?
+          WHERE work_refresh_run_id=? AND mail_id=?`).run(syncId, startedAt, range.workRefreshRunId!, mailId);
       }
     }
     for (const key of affected) {
@@ -1002,10 +1059,15 @@ export function importOutlookMail(records: OutlookMailRecord[], range: { from: s
       rebuildDailySummary(db, matterId, date);
     }
     db.prepare(`UPDATE sync_run SET status = 'completed', processed_count = ?, error_count = 0, completed_at = ? WHERE id = ?`).run(imported + skipped, now(), syncId);
-    return { ok: true, syncId, received: records.length, imported, skipped, linked, affectedSummaries: affected.size };
+    if (tracked) {
+      const targetCounts = db.prepare(`SELECT COUNT(*) AS n,COALESCE(SUM(CASE WHEN review_status='pending' THEN 1 ELSE 0 END),0) AS pending FROM work_refresh_mail WHERE work_refresh_run_id=?`).get(range.workRefreshRunId!) as { n: number; pending: number };
+      db.prepare('UPDATE work_refresh_run SET target_mail_count=?,pending_mail_count=?,updated_at=? WHERE id=?')
+        .run(Number(targetCounts.n), Number(targetCounts.pending), now(), range.workRefreshRunId!);
+    }
+    return { ok: true, syncId, received: records.length, imported, skipped, linked, targeted, affectedSummaries: affected.size };
   }));
 }
 
 export function listSyncRuns() {
-  return withDatabase((db) => db.prepare(`SELECT id, requested_from AS requestedFrom, requested_to AS requestedTo, folder_scope_json AS folderScopeJson, status, processed_count AS processedCount, error_count AS errorCount, started_at AS startedAt, completed_at AS completedAt FROM sync_run ORDER BY started_at DESC LIMIT 20`).all().map((row: any) => ({ ...row, folders: parseJson(row.folderScopeJson, []) })));
+  return withDatabase((db) => db.prepare(`SELECT id, requested_from AS requestedFrom, requested_to AS requestedTo, folder_scope_json AS folderScopeJson, status, processed_count AS processedCount, error_count AS errorCount, started_at AS startedAt, completed_at AS completedAt, work_refresh_run_id AS workRefreshRunId, work_refresh_stage_id AS workRefreshStageId FROM sync_run ORDER BY started_at DESC LIMIT 20`).all().map((row: any) => ({ ...row, folders: parseJson(row.folderScopeJson, []) })));
 }

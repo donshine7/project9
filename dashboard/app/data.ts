@@ -15,8 +15,17 @@ export const dashboardMeta = {
   account: 'jtjang@sspat.net',
   module: 'HiworksRulesFinal',
   trigger: 'Application_NewMailEx',
-  lastUpdated: '2026.09.16',
+  lastUpdated: '2026.09.18',
   scope: '새로 수신되는 메일',
+};
+
+export const runtimeObservation = {
+  status: '실행본 반영',
+  observed: 261,
+  expectedClassified: 241,
+  matchedClassified: 228,
+  period: '2026.09.16~09.18',
+  note: '최신 규칙을 컴파일·저장하고 Outlook을 재시작했습니다. 동기화 후 신규 메일 종단간 재관찰을 대기합니다.',
 };
 
 export const rules: Rule[] = [
@@ -160,9 +169,9 @@ export const rules: Rule[] = [
     id: 'R18',
     priority: 18,
     category: '해외',
-    condition: '해외 사건으로 확정 + 특허 관련 핵심어',
+    condition: '국가 접미사가 있는 전체 관리번호 또는 해외 사건으로 확정 + 특허 관련 핵심어',
     destination: '해외 특허',
-    note: '제목과 새로 작성된 본문을 확인',
+    note: '`P######-US`·`P######-PCT-EP` 등은 해외팀 참여자 없이도 해외 신호. `-RE`·`-S#`·`-DIV#`만 있는 번호는 제외',
   },
   {
     id: 'R19',
@@ -192,9 +201,9 @@ export const rules: Rule[] = [
     id: 'R22',
     priority: 22,
     category: '해외',
-    condition: '해외 사건으로 확정됐으나 분야를 특정할 수 없음',
+    condition: '해외 사건으로 확정됐으나 분야를 특정할 수 없음 또는 mslee@sspat.net·hjlee@sspat.net 직접 발신에 세부분류 단서가 없음',
     destination: '해외 기타',
-    note: '최종 해외 안전망',
+    note: '이명삼 부장 직접 발신은 모든 비해외 규칙보다 우선. 세부 해외 규칙을 먼저 적용하고 단서가 없으면 해외 기타',
   },
 ];
 
@@ -241,9 +250,10 @@ export const folderGroups = [
 ];
 
 export const overseasSignals = [
-  'mslee@sspat.net · 이명삼 부장 · 해외관리팀',
-  'hjlee@sspat.net · 이효정 과장 · 해외관리팀',
+  'mslee@sspat.net · 이명삼 부장 · 직접 발신은 항상 해외 폴더로 분류',
+  'hjlee@sspat.net · 이효정 과장 · 직접 발신은 단독 해외 신호, 수신·참조는 해외 단서와 함께 판단',
   'jtjang@sspat.net · 장진태 · 전자4팀/해외관리팀 (발신 시)',
+  'P·T·D 6자리 번호 + 국가 접미사는 참여자와 무관한 해외 신호',
   '제목과 인용·서명을 제외한 새 본문이 모두 영문',
   'P######-S#·P######-DIV#는 국내 특허 시리즈/분할출원 예외',
   '[EASYPAT_S] + 업무구분 OA·의견/보정서 작성은 국내 OA 우선',
@@ -295,6 +305,30 @@ export const executionMap = [
 ];
 
 export const changeLog = [
+  {
+    date: '2026.09.18',
+    title: '신규 수신 자동분류 관찰 및 최신 실행본 반영',
+    detail: '최근 261건을 대조해 NewMailEx 동작과 실행본 격차를 확인. 실제 HiworksRulesFinal을 최신 원본으로 교체해 컴파일·저장·재시작하고 저장된 OTM의 규칙·이벤트 연결을 재검증함. 기존 메일 이동 없음; 동기화 후 신규 메일 관찰 대기',
+    status: '실행본 반영',
+  },
+  {
+    date: '2026.09.17',
+    title: '국가 접미사 해외 특허 판정 보강',
+    detail: '“[상상특허] P261937-US/주식회사 트리플닷 - 미국출원을 위한 … 명세서 초안 송부의 건”을 해외 특허로 회귀 고정. 전체 관리번호의 국가 접미사를 독립 해외 신호로 사용하되 `-RE`·`-S#`·`-DIV#` 단독 접미사는 제외',
+    status: '소스 반영',
+  },
+  {
+    date: '2026.09.17',
+    title: '이명삼 부장 발신 메일 해외 폴더 강제 분류',
+    detail: 'mslee@sspat.net 직접 발신은 비해외 규칙보다 먼저 판정. 중국 가출원·PI·비용·디자인·상표·특허를 세부 분류하고 단서가 없으면 해외 기타로 폴백. 기존 메일 이동 없음',
+    status: '소스 반영',
+  },
+  {
+    date: '2026.09.16',
+    title: '이효정 과장 발신 메일 해외 분류 보강',
+    detail: 'hjlee@sspat.net 직접 발신을 단독 해외 신호로 인정. 해외 세부분류를 먼저 적용하고 단서 없는 “[업무전달] 부재중 전화 전달의 건”은 해외 기타로 폴백. 기존 메일 이동 없음',
+    status: '소스 반영',
+  },
   {
     date: '2026.09.16',
     title: 'Outlook 원본 동기화 및 문자 인코딩 점검',
@@ -379,7 +413,7 @@ export const roadmap = [
   {
     phase: '현재',
     title: 'Outlook (classic) 자동분류',
-    detail: '사용자 PC의 classic 앱이 새 메일을 VBA 정책으로 기존 폴더에 이동',
+    detail: 'NewMailEx 기본 동작 확인. 2026.09.17 이후 추가 규칙은 Outlook 실행본 동기화 대기',
     state: 'active',
   },
   {

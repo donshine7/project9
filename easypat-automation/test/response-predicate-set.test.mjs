@@ -12,6 +12,12 @@ test("verifies all fixed document predicates across every row without returning 
   assert.doesNotMatch(JSON.stringify(result),/private-group|국내진행/);
 });
 
+test("accepts an empty result only when every predicate column is present",()=>{
+  const binding=compileResponsePredicateSet(statement,policy);
+  const result=verifyResponsePredicateSet({columns:["DELETEFLG","DOC_NUM","DIV","GRP_KEY","FILE_NAME"],rows:[]},binding);
+  assert.deepEqual(result,{verified:true,responseColumns:["DELETEFLG","DOC_NUM","DIV","GRP_KEY"],rowCount:0,rawValuesIncluded:false});
+});
+
 test("fails closed on changed rows, missing predicates, duplicate columns, and malformed policy",()=>{
   const binding=compileResponsePredicateSet(statement,policy),row={DELETEFLG:"N",DOC_NUM:"9",DIV:"국내진행",GRP_KEY:"private-group"};
   assert.throws(()=>verifyResponsePredicateSet({columns:Object.keys(row),rows:[row,{...row,GRP_KEY:"other"}]},binding),error=>!String(error).includes("private-group")&&!String(error).includes("other"));

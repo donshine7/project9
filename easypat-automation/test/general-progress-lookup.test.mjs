@@ -12,12 +12,12 @@ const progressColumns=["idx","idx_parent","no_rec","d_rec","d_noti","rec_doc","r
 const progressDefinition={templateId:progressEnvelope.templateId,command:"SELECT",statementCount:1,productionEnabled:false,baseFingerprint:fingerprintEnvelope(progressEnvelope),parameterization:{mode:"single-scalar-equality",source:"verified-search-identity",predicateColumn:"idx_parent",sourceTemplateId:searchEnvelope.templateId,sourceColumn:"idx"},responseVerification:{mode:"statement-literal-all-rows",predicateColumn:"idx_parent",responseColumn:"idx_parent"},expectedResponseColumns:progressColumns};
 const templates=new Map([[countEnvelope.templateId,countEnvelope],[searchEnvelope.templateId,searchEnvelope],[progressEnvelope.templateId,progressEnvelope]]);
 
-function setup({wrongIdentity=false,count="1"}={}){
+function setup({wrongIdentity=false,count="1",searchRows}={}){
   const calls=[];
   const lookup=createGeneralProgressLookup({countDefinition,searchDefinition,progressDefinition,loadTemplate:async id=>structuredClone(templates.get(id)),executeRead:async request=>{
     calls.push(request.role);
     if(request.role==="count-results")return{templateId:countEnvelope.templateId,columns:["recCount"],rows:[{recCount:count}]};
-    if(request.role==="fetch-result-rows")return{templateId:searchEnvelope.templateId,columns:["idx","ourref"],rows:[{idx:"901",ourref:"PT261130"}]};
+    if(request.role==="fetch-result-rows")return{templateId:searchEnvelope.templateId,columns:["idx","ourref"],rows:searchRows??[{idx:"901",ourref:"PT261130"}]};
     const row=Object.fromEntries(progressColumns.map(column=>[column,""]));Object.assign(row,{idx:"PRIVATE_ROW",idx_parent:wrongIdentity?"902":"901",no_rec:"1",rec_doc:"의견서",rec_memo:"진행 내용"});
     return{templateId:progressEnvelope.templateId,columns:progressColumns,rows:[row]};
   }});
@@ -29,6 +29,13 @@ test("generic progress lookup binds the fresh matter identity and projects only 
   assert.deepEqual(calls,["count-results","fetch-result-rows","progress-records"]);
   assert.equal(value.matterReference,"PT261130");assert.equal(value.count,1);assert.equal(value.items[0].description,"진행 내용");
   assert.doesNotMatch(JSON.stringify(value),/901|PRIVATE_ROW|idx_parent/);
+});
+
+test("generic progress lookup selects one exact matter from multiple LIKE candidates",async()=>{
+  const {lookup,calls}=setup({count:"2",searchRows:[{idx:"901",ourref:"PT261130"},{idx:"902",ourref:"PT261130-US"}]});
+  const value=await lookup.list({matterReference:"PT261130"});
+  assert.equal(value.matterReference,"PT261130");
+  assert.deepEqual(calls,["count-results","fetch-result-rows","progress-records"]);
 });
 
 test("generic progress lookup stops on ambiguous search and mismatched progress identity without retry",async()=>{

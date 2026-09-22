@@ -15,7 +15,7 @@ test("intermediate request preserves an unbound read only as non-executable evid
 });
 
 test("intermediate request rejects writes and masks",()=>{
-  for(const statement of ["UPDATE progress SET kind='x' WHERE idx_parent='matter-101'","SELECT * FROM progress WHERE idx_parent='!!!sanitized!!!'"]){
+  for(const statement of ["UPDATE progress SET kind='x' WHERE idx_parent='matter-101'","SELECT * FROM progress WHERE idx_parent='!!!sanitized!!!'","SELECT|WITH)\\s'","SELECT nonsense"]){
     assert.throws(()=>inspectDocumentGroupIntermediateRequest({statement,mainEnvelope,documentEnvelope}));
   }
 });

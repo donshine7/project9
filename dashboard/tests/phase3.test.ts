@@ -82,6 +82,16 @@ try {
   const newer = analysisStatus().candidates.find(x => x.run_id === newerRun)!;
   importOutlookMail([{ entryId: 'new-mail-after-snapshot', folderPath: '보낸 편지함', direction: 'sent', subject: 'P260001 후속 회신', mailAt: '2026-09-11T16:00:00Z', body: '도면을 확인했습니다.' }], { from: '2026-09-11T00:00:00Z', to: '2026-09-13T00:00:00Z', folders: ['보낸 편지함'] });
   assert.throws(() => reviewCandidate(newer.id, { action: 'accept', expectedVersion: 1 }), /새 메일/);
+  const noActionRun = start('action_judgement');
+  const noAction = { key: 'no-current-action', kind: 'action', entityType: 'matter', entityId: String(matter.matter.id), fields: { required: f(false) } };
+  ingestAnalysis(result(noActionRun, [noAction]));
+  const noActionCandidate = analysisStatus().candidates.find(x => x.run_id === noActionRun)!;
+  importOutlookMail([{ entryId: 'mail-after-no-action', folderPath: '받은 편지함', direction: 'received', subject: '일반 안내', mailAt: '2026-09-11T17:00:00Z', body: '새 안내입니다.' }], { from: '2026-09-11T00:00:00Z', to: '2026-09-13T00:00:00Z', folders: ['받은 편지함'] });
+  assert.throws(() => reviewCandidate(noActionCandidate.id, { action: 'accept', expectedVersion: 1 }), /새 메일/);
+  const freshNoActionRisk = start('high_risk_verification');
+  ingestAnalysis(result(freshNoActionRisk, [{ key: 'fresh-no-action-verify', kind: 'risk', entityType: 'candidate', entityId: noActionCandidate.id, fields: { verdict: f('confirmed') } }]));
+  reviewCandidate(noActionCandidate.id, { action: 'accept', expectedVersion: 1 });
+  assert.equal(getMatter(String(matter.matter.id)).actions.length, 2);
   withDatabase(db => {
     assert.ok(Number(db.prepare('SELECT COUNT(*) n FROM user_feedback').get()!.n) >= 12);
     assert.equal(db.prepare('SELECT COUNT(*) n FROM decision_comparison WHERE eligible_for_eval=1').get()!.n, 0);
@@ -104,6 +114,14 @@ try {
   assert.equal(captureAcceptedRelationshipEntries().duplicate, true);
   const organizationId = String(getMatter(String(matter.matter.id)).organizations[0].id);
   assert.match(wikiDetail('organization', organizationId).entries[0].content, /P260001의 고객/);
+  const exactConfirmedRun = start('matter_linking');
+  ingestAnalysis(result(exactConfirmedRun, [{ ...party, key: 'party-exact-confirmed-after-version-change' }]));
+  const exactConfirmedCandidate = analysisStatus().candidates.find(x => x.run_id === exactConfirmedRun)!;
+  const exactConfirmedRisk = start('high_risk_verification');
+  ingestAnalysis(result(exactConfirmedRisk, [{ key: 'party-exact-confirmed-verify', kind: 'risk', entityType: 'candidate', entityId: exactConfirmedCandidate.id, fields: { verdict: f('confirmed') } }]));
+  withDatabase(db => db.prepare('UPDATE organization SET row_version=row_version+1,updated_at=? WHERE id=?').run(new Date().toISOString(), organizationId));
+  reviewCandidate(exactConfirmedCandidate.id, { action: 'accept', expectedVersion: 1 });
+  assert.equal(getMatter(String(matter.matter.id)).organizations.length, 1);
   const relationshipAudit = auditRelationshipCoverage();
   assert.ok(relationshipAudit.findings.every((finding: any) => finding.matterRef !== 'P260001'));
   assert.equal(auditRelationshipCoverage().duplicate, true);

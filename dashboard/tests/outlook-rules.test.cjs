@@ -75,4 +75,56 @@ for (const subject of [
   '[업무전달] 2026.09.16 마감리스트 확인 요청',
   '[업무전달] 사건등록 완료',
 ]) assert.equal(deadlineDestination(subject), '', subject);
-console.log('Outlook classification regression tests passed (condolence, education, domain boundary, deadline, CJK encoding, event wiring).');
+
+// A direct message from a confirmed overseas-management sender is enough to
+// establish the overseas branch. mslee has a stronger guarantee: every direct
+// message must be routed before any non-overseas rule can intercept it.
+const overseasFunction = vba.slice(vba.indexOf('Private Function IsOverseasMail'), vba.indexOf('Private Function HasForeignClue'));
+assert.match(overseasFunction, /If GetSenderSmtpAddress\(mail\) = "mslee@sspat\.net" _\s+Or GetSenderSmtpAddress\(mail\) = "hjlee@sspat\.net" Then\s+IsOverseasMail = True\s+Exit Function/);
+assert.match(overseasFunction, /If HasOverseasMatterReference\(subjectText\) Then\s+IsOverseasMail = True\s+Exit Function/);
+assert.ok(overseasFunction.indexOf('If HasOverseasMatterReference(subjectText) Then') < overseasFunction.indexOf('If hasOverseasTeam And HasForeignClue'));
+const overseasReferenceFunction = vba.slice(vba.indexOf('Private Function HasOverseasMatterReference'), vba.indexOf('Private Function IsOverseasFinance'));
+assert.match(overseasReferenceFunction, /\(\^\|\[\^A-Z0-9\]\)\[PTD\]\[0-9\]\{6\}/);
+const countrySuffixReference = /(?:^|[^A-Z0-9])[PTD][0-9]{6}(?:-(?:S[0-9]+|DIV[0-9]+|RE))?-(?:PCT-)?(?!RE(?:[^A-Z]|$))[A-Z]{2}(?:[^A-Z]|$)/i;
+const pctReference = /(?:^|[^A-Z0-9])[PTD][0-9]{6}(?:-(?:S[0-9]+|DIV[0-9]+|RE))?-PCT(?:[^A-Z]|$)/i;
+const isOverseasReference = subject => countrySuffixReference.test(subject) || pctReference.test(subject);
+for (const subject of [
+  '[상상특허] P261937-US/주식회사 트리플닷 - 미국출원을 위한 "젤네일 제거용 화장료 조성물" 관련 명세서 초안 송부의 건',
+  'P211758-PCT-EP',
+  'P241750-RE-US',
+  'P262000-S1-JP',
+  'T261420-UA',
+  'D231154-JP',
+  'P261931-PCT',
+]) assert.equal(isOverseasReference(subject), true, subject);
+for (const subject of ['P241750-RE', 'P262000-S1', 'P241667-DIV1', 'P261937']) {
+  assert.equal(isOverseasReference(subject), false, subject);
+}
+const destinationFunction = vba.slice(vba.indexOf('Private Function GetDestinationName'), vba.indexOf('Private Function IsOverseasMail'));
+const forcedMsleeStart = destinationFunction.indexOf('If senderAddress = "mslee@sspat.net" Then');
+const fixedAutomationStart = destinationFunction.indexOf("    ' 1-3. Fixed messages");
+assert.ok(forcedMsleeStart >= 0 && forcedMsleeStart < fixedAutomationStart);
+const forcedMsleeBlock = destinationFunction.slice(forcedMsleeStart, fixedAutomationStart);
+assert.match(forcedMsleeBlock, /GetDestinationName = GetDirectOverseasDestination\(subjectText, newBody\)\s+Exit Function/);
+const directDestination = destinationFunction.slice(destinationFunction.indexOf('Private Function GetDirectOverseasDestination'));
+for (const folder of ['중국 가출원', '해외 견적/청구/정산', '해외 디자인', '해외 상표', '해외 특허', '해외 기타']) {
+  assert.ok(directDestination.includes(`GetDirectOverseasDestination = "${folder}"`), folder);
+}
+for (const specificRule of ['IsOverseasFinance', 'IsOverseasDesign', 'IsOverseasTrademark', 'IsOverseasPatent']) {
+  assert.ok(destinationFunction.indexOf(specificRule) < destinationFunction.lastIndexOf('GetDestinationName = "해외 기타"'));
+}
+function senderOnlyOverseasDestination(sender, hasSpecificOverseasClue = false) {
+  const normalized = String(sender).trim().toLowerCase();
+  const isOverseas = normalized === 'mslee@sspat.net' || normalized === 'hjlee@sspat.net';
+  if (!isOverseas) return '';
+  return hasSpecificOverseasClue ? '해외 세부분류' : '해외 기타';
+}
+assert.equal(senderOnlyOverseasDestination('mslee@sspat.net'), '해외 기타');
+assert.equal(senderOnlyOverseasDestination(' MSLEE@SSPAT.NET ', true), '해외 세부분류');
+assert.equal(senderOnlyOverseasDestination('hjlee@sspat.net'), '해외 기타');
+assert.equal(senderOnlyOverseasDestination(' HJLEE@SSPAT.NET '), '해외 기타');
+assert.equal(senderOnlyOverseasDestination('hjlee@sspat.net', true), '해외 세부분류');
+assert.equal(senderOnlyOverseasDestination('other@sspat.net'), '');
+assert.equal(senderOnlyOverseasDestination('hjlee@sspat.net'), '해외 기타', '[업무전달] 부재중 전화 전달의 건');
+
+console.log('Outlook classification regression tests passed (condolence, education, domain boundary, deadline, country-suffix overseas matters, forced overseas senders, CJK encoding, event wiring).');

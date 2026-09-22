@@ -3,7 +3,7 @@ import { compileResponsePredicateSet,verifyResponsePredicateSet } from "./respon
 import { projectVerifiedDocumentList,resolveVerifiedDocumentDownload } from "./document-list.mjs";
 import { createVerifiedDocumentSelection } from "./document-selection-context.mjs";
 import { normalizeExactMatterReference } from "./matter-reference.mjs";
-import {bindMatterIdentityDetailTemplate,bindMatterReferenceSearchTemplate,createMatterIdentityContext} from "./parameterized-read-template.mjs";
+import {bindMatterIdentityDetailTemplate,bindMatterReferenceSearchTemplate,createMatterIdentityContext,readMatterSearchCandidateCount} from "./parameterized-read-template.mjs";
 
 export class GeneralDocumentLookupError extends Error{
   constructor(code){super(code);this.name="GeneralDocumentLookupError";this.code=code;}
@@ -19,21 +19,23 @@ export function createGeneralDocumentLookup({countDefinition,searchDefinition,do
   const count=structuredClone(countDefinition),search=structuredClone(searchDefinition),document=structuredClone(documentDefinition);
   if(typeof loadTemplate!=="function"||typeof executeRead!=="function")throw new Error("GENERAL_DOCUMENT_PROVIDER_REJECTED");
   async function readVerified(matter){
-    let countEnvelope,countResult,searchEnvelope,searchResult,context,documentEnvelope,documentResult,binding;
+    let countEnvelope,countResult,candidateCount,searchEnvelope,searchResult,context,documentEnvelope,documentResult,binding;
     try{
       countEnvelope=bindMatterReferenceSearchTemplate({envelope:await loadTemplate(count.templateId),definition:count,matterReference:matter});
       countResult=await executeRead({operation:"search-matter",role:"count-results",envelope:countEnvelope});
-      if(!countResult||countResult.templateId!==count.templateId||!exactSchema(countResult,count.expectedResponseColumns)||!Array.isArray(countResult.rows)||countResult.rows.length!==1||countResult.rows[0]?.[count.responseCountColumn]!=="1"||credentialColumns(countResult.columns).length)throw new Error();
+      if(!countResult||countResult.templateId!==count.templateId||!exactSchema(countResult,count.expectedResponseColumns)||credentialColumns(countResult.columns).length)throw new Error();
+      candidateCount=readMatterSearchCandidateCount({result:countResult,definition:count});
       searchEnvelope=bindMatterReferenceSearchTemplate({envelope:await loadTemplate(search.templateId),definition:search,matterReference:matter});
       searchResult=await executeRead({operation:"search-matter",role:"fetch-result-rows",envelope:searchEnvelope});
+      if(!Array.isArray(searchResult?.rows)||searchResult.rows.length!==candidateCount)throw new Error();
       context=createMatterIdentityContext({matterReference:matter,searchResult,definition:search});
     }catch{throw new GeneralDocumentLookupError("GENERAL_DOCUMENT_SEARCH_REJECTED");}
-    finally{countEnvelope=null;countResult=null;searchEnvelope=null;searchResult=null;}
+    finally{countEnvelope=null;countResult=null;candidateCount=null;searchEnvelope=null;searchResult=null;}
     try{
       documentEnvelope=bindMatterIdentityDetailTemplate({envelope:await loadTemplate(document.templateId),definition:document,context});
       binding=compileResponsePredicateSet(documentEnvelope.statements[0],document.responsePredicateSetVerification);
       documentResult=await executeRead({operation:"list-documents",role:"document-records",envelope:documentEnvelope});
-      if(!documentResult||documentResult.templateId!==document.templateId||!exactSchema(documentResult,document.expectedResponseColumns)||!Array.isArray(documentResult.rows)||documentResult.rows.length<1||documentResult.rows.length>500||credentialColumns(documentResult.columns).length)throw new Error();
+      if(!documentResult||documentResult.templateId!==document.templateId||!exactSchema(documentResult,document.expectedResponseColumns)||!Array.isArray(documentResult.rows)||documentResult.rows.length>500||credentialColumns(documentResult.columns).length)throw new Error();
       verifyResponsePredicateSet(documentResult,binding);
       return{matterReference:matter,result:{...documentResult,matterReference:matter}};
     }catch{throw new GeneralDocumentLookupError("GENERAL_DOCUMENT_RESULT_REJECTED");}
@@ -45,7 +47,7 @@ export function createGeneralDocumentLookup({countDefinition,searchDefinition,do
       let matter,verified;
       try{matter=normalizeExactMatterReference(input.matterReference);}catch{throw new GeneralDocumentLookupError("GENERAL_DOCUMENT_INPUT_REJECTED");}
       verified=await readVerified(matter);
-      try{return projectVerifiedDocumentList(verified.result,{matterReference:matter,responseBindingVerified:true});}
+      try{return projectVerifiedDocumentList(verified.result,{matterReference:matter,responseBindingVerified:true,templateId:document.templateId});}
       catch{throw new GeneralDocumentLookupError("GENERAL_DOCUMENT_RESULT_REJECTED");}
       finally{verified=null;}
     },
@@ -55,7 +57,7 @@ export function createGeneralDocumentLookup({countDefinition,searchDefinition,do
       try{matter=normalizeExactMatterReference(input.matterReference);}catch{throw new GeneralDocumentLookupError("GENERAL_DOCUMENT_INPUT_REJECTED");}
       verified=await readVerified(matter);
       try{
-        target=resolveVerifiedDocumentDownload(verified.result,{matterReference:matter,position:input.position,expectedFileName:input.expectedFileName,responseBindingVerified:true});
+        target=resolveVerifiedDocumentDownload(verified.result,{matterReference:matter,position:input.position,expectedFileName:input.expectedFileName,responseBindingVerified:true,templateId:document.templateId});
         return createVerifiedDocumentSelection(target);
       }catch{throw new GeneralDocumentLookupError("GENERAL_DOCUMENT_SELECTION_REJECTED");}
       finally{verified=null;target=null;}

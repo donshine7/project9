@@ -9,6 +9,7 @@ test("normalizes supported matter families while preserving every suffix",()=>{
   assert.equal(parseMatterReference("pt12345").family,"sangsang-provisional");
   assert.equal(parseMatterReference("ppt12345-cn(pa)").family,"sangsang-plus-provisional");
   assert.equal(parseMatterReference("t12345").family,"trademark");
+  assert.equal(parseMatterReference("d12345-kr").family,"design");
 });
 
 test("keeps CN, CN(PA), and series members as distinct complete identities",()=>{

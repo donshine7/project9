@@ -7,11 +7,12 @@ import {createDocumentDownloadTransport} from "./document-download-transport.mjs
 import {normalizeExactMatterReference} from "./matter-reference.mjs";
 
 const defaultRoot=fileURLToPath(new URL("../../.local/downloads/",import.meta.url));
+const SOURCE_TEMPLATE_IDS=new Set(["matter-detail.documents.v1","matter-detail.progress-documents.v1"]);
 
 function verifiedPolicy(policy){
   const constraints=policy?.genericDownloadConstraints;
   if(!policy?.allowedOperations?.includes("download-document")||constraints?.enabled!==true||constraints?.mcpExposureEnabled!==true||
-     constraints?.sourceTemplateId!=="matter-detail.documents.v1"||constraints?.freshVerifiedDocumentListRequired!==true||constraints?.sameOriginOnly!==true||
+     !SOURCE_TEMPLATE_IDS.has(constraints?.sourceTemplateId)||constraints?.freshVerifiedDocumentListRequired!==true||constraints?.sameOriginOnly!==true||
      constraints?.maximumBytes!==67108864||constraints?.overwriteAllowed!==false||constraints?.automaticRetryEnabled!==false||constraints?.callerSuppliedUploadPathAllowed!==false||
      policy?.genericDocumentConstraints?.enabled!==true||policy?.mutationOperationsEnabled!==false||policy?.arbitrarySqlEnabled!==false){
     throw new Error("GENERIC_DOWNLOAD_POLICY_REJECTED");
@@ -33,10 +34,12 @@ async function checkedDestination(root,matterReference,fileName){
 export function createGenericDocumentDownloader({policy,prepareDownload,getSessionCookie,transport=createDocumentDownloadTransport(),root=defaultRoot}={}){
   const fixedPolicy=structuredClone(policy),resolvedRoot=path.resolve(root);
   return Object.freeze({async download(input){
-    if(!input||Object.keys(input).sort().join(",")!=="expectedFileName,matterReference,position"||typeof prepareDownload!=="function"||typeof getSessionCookie!=="function"||typeof transport!=="function")throw new Error("GENERIC_DOWNLOAD_INPUT_REJECTED");
-    verifiedPolicy(fixedPolicy);let matter,context,target,cookie,response;
+    const constraints=verifiedPolicy(fixedPolicy),progressSource=constraints.sourceTemplateId==="matter-detail.progress-documents.v1",expectedKeys=progressSource?"expectedFileName,matterReference,position,progressDocument":"expectedFileName,matterReference,position";
+    if(!input||Object.keys(input).sort().join(",")!==expectedKeys||typeof prepareDownload!=="function"||typeof getSessionCookie!=="function"||typeof transport!=="function"||
+       (progressSource&&(typeof input.progressDocument!=="string"||!input.progressDocument.length||input.progressDocument.length>512||input.progressDocument!==input.progressDocument.trim()||/[\p{Cc}\p{Cs}]/u.test(input.progressDocument))))throw new Error("GENERIC_DOWNLOAD_INPUT_REJECTED");
+    let matter,context,target,cookie,response;
     try{
-      matter=normalizeExactMatterReference(input.matterReference);context=await prepareDownload({matterReference:matter,position:input.position,expectedFileName:input.expectedFileName});target=consumeVerifiedDocumentSelection(context);
+      matter=normalizeExactMatterReference(input.matterReference);context=await prepareDownload(progressSource?{matterReference:matter,progressDocument:input.progressDocument,position:input.position,expectedFileName:input.expectedFileName}:{matterReference:matter,position:input.position,expectedFileName:input.expectedFileName});target=consumeVerifiedDocumentSelection(context);
       if(target.matterReference!==matter||target.position!==input.position||target.fileName!==input.expectedFileName)throw new Error("GENERIC_DOWNLOAD_SELECTION_REJECTED");
       const destination=await checkedDestination(resolvedRoot,matter,target.fileName);cookie=await getSessionCookie();response=await transport({uploadPath:target.uploadPath,cookie,expectedBytes:target.fileSizeBytes,extension:target.extension});
       if(!Buffer.isBuffer(response?.bytes)||response.size!==target.fileSizeBytes||response.bytes.length!==target.fileSizeBytes||typeof response.contentType!=="string")throw new Error("GENERIC_DOWNLOAD_RESPONSE_REJECTED");

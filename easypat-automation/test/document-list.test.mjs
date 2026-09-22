@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { diagnoseDocumentListEvidence, inspectDocumentListEvidence, projectDocumentList, resolveDocumentDownload } from "../src/protocol/document-list.mjs";
+import { diagnoseDocumentListEvidence, inspectDocumentListEvidence, projectDocumentList, projectVerifiedDocumentList, resolveDocumentDownload } from "../src/protocol/document-list.mjs";
 
 function source(overrides={}){const row={IDX:"PRIVATE_IDX",GRP_KEY:"PRIVATE_GROUP",DOC_NUM:"9",DIV:"국내진행",DELETEFLG:"N",DOC_NAME:"중간서류",REG_DATE:"2026-05-21",FILE_NAME:"P261793외_수임내역서.pdf",FILE_NAME_UPLOAD:"upload/app_proc/2026/05/21/20260521_12345678.pdf",FILE_SIZE:"51373",MUID:"PRIVATE_USER",...overrides};return{matterReference:"P261793",templateId:"matter-detail.documents.v1",columns:Object.keys(row),rows:[row]};}
 
@@ -36,3 +36,11 @@ test("diagnostics return only category counts",()=>{
 });
 
 test("resolves a download path only from an exact list position and filename",()=>{const target=resolveDocumentDownload(source(),{position:1,expectedFileName:"P261793외_수임내역서.pdf"});assert.equal(target.uploadPath,"upload/app_proc/2026/05/21/20260521_12345678.pdf");assert.throws(()=>resolveDocumentDownload(source(),{position:1,expectedFileName:"other.pdf"}),/SELECTION_REJECTED/);assert.throws(()=>resolveDocumentDownload(source(),{position:2,expectedFileName:"P261793외_수임내역서.pdf"}),/SELECTION_REJECTED/);});
+
+test("accepts observed patent-office and drawing formats in verified lists",()=>{
+  for(const [fileName,uploadPath] of [["citation.bib","upload/app/2026/09/11/20260911_12345678.bib"],["drawing.dwg","upload/app_proc/2026/09/11/20260911_12345679.dwg"]]){
+    const result=source({FILE_NAME:fileName,FILE_NAME_UPLOAD:uploadPath});
+    const projected=projectVerifiedDocumentList({...result,matterReference:"P261793"},{matterReference:"P261793",responseBindingVerified:true});
+    assert.equal(projected.items[0].fileName,fileName);
+  }
+});

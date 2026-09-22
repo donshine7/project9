@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { analysisMailIndex, analysisPacket, analysisStatus, bindAnalysis, failAnalysis, ingestAnalysis, prepareAnalysis } from '../lib/analysis';
 import { captureVerifiedMail, ingestWiki, prepareWiki, retryRun, reviewWiki, wikiPacket } from '../lib/wiki';
 import { auditMailLinks } from '../lib/link-audit';
+import { activateSourcePriorityPolicy, recordEasyPatVerification } from '../lib/easypat-verification';
+import { createBackup } from '../lib/work-db';
 
 // CLI is the trusted main-task bridge. No browser endpoint accepts forged LLM runs.
 const [command, arg, ...rest] = process.argv.slice(2);
@@ -22,6 +24,8 @@ try {
   else if (command === 'wiki-packet') result = wikiPacket(arg);
   else if (command === 'wiki-ingest') result = ingestWiki(JSON.parse(readFileSync(arg, 'utf8').replace(/^\uFEFF/, '')));
   else if (command === 'wiki-publish') result = reviewWiki(arg, 'publish', Number(rest[0]), 'Codex');
-  else throw new Error('analysis mails | prepare OP MAIL_ID... | packet RUN_ID | packet-file RUN_ID PATH | bind RUN_ID AGENT_ID MODEL EFFORT | ingest JSON_PATH | fail RUN_ID ERROR_CODE | status');
+  else if (command === 'easypat-record') result = recordEasyPatVerification(JSON.parse(readFileSync(arg, 'utf8').replace(/^\uFEFF/, '')));
+  else if (command === 'source-policy-activate') result = { backup: createBackup(), policy: activateSourcePriorityPolicy('장진태') };
+  else throw new Error('analysis mails | prepare OP MAIL_ID... | packet RUN_ID | packet-file RUN_ID PATH | bind RUN_ID AGENT_ID MODEL EFFORT | ingest JSON_PATH | fail RUN_ID ERROR_CODE | easypat-record JSON_PATH | source-policy-activate | status');
   console.log(JSON.stringify(result, null, 2));
 } catch (error) { console.error(error instanceof Error ? error.message : '분석 실패'); process.exitCode = 1; }

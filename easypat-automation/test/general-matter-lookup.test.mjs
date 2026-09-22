@@ -55,12 +55,21 @@ test("stops after an ambiguous search without retrying or reading detail",async(
   assert.deepEqual(calls,["count-results","fetch-result-rows"]);
 });
 
-test("stops after a zero or multiple count before fetching rows",async()=>{
-  for(const count of ["0","2"]){
-    const {lookup,calls}=setup({count});
-    await assert.rejects(lookup.lookupSummary({matterReference:"P261830"}),error=>error.code==="GENERAL_LOOKUP_SEARCH_REJECTED");
-    assert.deepEqual(calls,["count-results"]);
-  }
+test("stops after a zero count and rejects a candidate-count mismatch",async()=>{
+  const zero=setup({count:"0"});
+  await assert.rejects(zero.lookup.lookupSummary({matterReference:"P261830"}),error=>error.code==="GENERAL_LOOKUP_SEARCH_REJECTED");
+  assert.deepEqual(zero.calls,["count-results"]);
+  const mismatch=setup({count:"2"});
+  await assert.rejects(mismatch.lookup.lookupSummary({matterReference:"P261830"}),error=>error.code==="GENERAL_LOOKUP_SEARCH_REJECTED");
+  assert.deepEqual(mismatch.calls,["count-results","fetch-result-rows"]);
+});
+
+test("selects one exact matter from multiple LIKE candidates",async()=>{
+  const {lookup,calls}=setup({count:"2",searchRows:[{idx:"exact-key",ourref:"P261830"},{idx:"partial-key",ourref:"P261830-PRO1"}]});
+  const summary=await lookup.lookupSummary({matterReference:"P261830"});
+  assert.equal(summary.matterReference,"P261830");
+  assert.deepEqual(calls,["count-results","fetch-result-rows","main-matter-record"]);
+  assert.doesNotMatch(JSON.stringify(summary),/exact-key|partial-key/);
 });
 
 test("rejects a detail identity mismatch without disclosing either identity",async()=>{

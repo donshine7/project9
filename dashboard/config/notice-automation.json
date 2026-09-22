@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "timezone": "Asia/Seoul",
+  "dailyRunTime": "09:00",
+  "schedulerEnabled": false,
+  "outlookDetectionEnabled": false,
+  "features": {
+    "opinion_submission": {
+      "detectionEnabled": true,
+      "automaticPublishEnabled": false,
+      "projectCreationEnabled": true
+    },
+    "rejection_decision": {
+      "detectionEnabled": true,
+      "automaticPublishEnabled": false,
+      "projectCreationEnabled": false
+    },
+    "priority_exam_supplement_request": {
+      "detectionEnabled": true,
+      "automaticPublishEnabled": false,
+      "projectCreationEnabled": false
+    }
+  }
+}

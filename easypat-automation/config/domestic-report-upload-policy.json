@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "status": "readback-and-cross-matter-validation-required",
+  "previewEnabled": true,
+  "commitEnabled": false,
+  "mcpExposureEnabled": false,
+  "workflow": [
+    "domestic-matter",
+    "add",
+    "report-date",
+    "assignee",
+    "report-document",
+    "selected-file-upload",
+    "save",
+    "read-back-verification"
+  ],
+  "defaults": {
+    "timezone": "Asia/Seoul",
+    "reportDate": "today",
+    "assignee": "장진태"
+  },
+  "allowedAssignees": ["장진태"],
+  "allowedReportDocuments": [
+    "특허 출원 진행 요청",
+    "의견서 및 보정서 제출 요청"
+  ],
+  "stagingRoot": ".local/upload-staging",
+  "filePolicy": {
+    "allowedExtensions": ["pdf"],
+    "maximumBytes": 67108864,
+    "pdfMagicRequired": true,
+    "symbolicLinksAllowed": false,
+    "nestedPathsAllowed": false
+  },
+  "approval": {
+    "required": true,
+    "ttlSeconds": 600,
+    "singleUse": true,
+    "binds": [
+      "matterReference",
+      "reportDate",
+      "assignee",
+      "reportDocument",
+      "fileName",
+      "fileSizeBytes",
+      "sha256"
+    ]
+  },
+  "duplicateKey": [
+    "matterReference",
+    "reportDate",
+    "assignee",
+    "reportDocument",
+    "fileName",
+    "fileSizeBytes",
+    "sha256"
+  ],
+  "automaticRetryEnabled": false,
+  "overwriteAllowed": false,
+  "automaticRollbackEnabled": false,
+  "callerSuppliedSqlAllowed": false,
+  "callerSuppliedInternalIdentityAllowed": false,
+  "callerSuppliedServerPathAllowed": false,
+  "protocolEvidence": {
+    "domesticMatterClassificationCaptured": true,
+    "assigneeLookupCaptured": true,
+    "reportDocumentLookupCaptured": true,
+    "fileTransferCaptured": true,
+    "reportInsertCaptured": true,
+    "fileLinkCaptured": true,
+    "saveOrderCaptured": true,
+    "readBackVerificationCaptured": false
+  },
+  "requiredDistinctLiveValidations": 2,
+  "completedDistinctLiveValidations": 0,
+  "validatedMatterReferences": []
+}

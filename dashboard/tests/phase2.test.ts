@@ -156,6 +156,8 @@ try {
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM decision_run WHERE operation='group_reconciliation' AND status='succeeded'").get() as any).n, 1);
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM decision_item WHERE decision_run_id=?').get(confirmedGroups.runId) as any).n, 3);
     assert.equal((db.prepare("SELECT COUNT(*) AS n FROM source_observation WHERE source_type='excel' AND field_path='groups.membership'").get() as any).n, 2);
+    assert.equal((db.prepare('SELECT source_priority_version AS version FROM input_snapshot WHERE id=(SELECT input_snapshot_id FROM decision_run WHERE id=?)').get(confirmedGroups.runId) as any).version, 'source-priority-v2');
+    assert.deepEqual(JSON.parse(String((db.prepare('SELECT routing_snapshot_json AS routing FROM decision_run WHERE id=?').get(confirmedGroups.runId) as any).routing)).sourcePriority, ['easy_pat', 'registration_mail', 'excel', 'mail_inference']);
   });
 
   updateEntityNote('organization', String(detail.organizations[0].id), '회사 비고 수정', Number(detail.organizations[0].rowVersion));
@@ -163,7 +165,7 @@ try {
   assert.equal(detail.organizations[0].note, '회사 비고 수정');
 
   const records = [
-    { entryId: 'mail-1', folderPath: '\\메일함\\받은 편지함', direction: 'received' as const, subject: '[P251556] 초안 검토 요청', senderName: '홍길동', senderEmail: 'hong@example.com', to: '장진태', cc: '', mailAt: '2026-09-10T01:00:00.000Z', body: '초안의 청구항 1을 확인해 주세요.' },
+    { entryId: 'mail-1', folderPath: '\\메일함\\받은 편지함', direction: 'received' as const, subject: '[P251556] 초안 검토 요청', senderName: '홍길동', senderEmail: 'hong@example.com', to: '장진태', cc: '', storeDisplayName: 'jtjang@sspat.net', recipients: [{ type: 'to', displayName: '장진태', smtpAddress: 'JTJANG@SSPAT.NET', resolved: true }], mailAt: '2026-09-10T01:00:00.000Z', body: '초안의 청구항 1을 확인해 주세요.' },
     { entryId: 'mail-2', folderPath: '\\메일함\\보낸 편지함', direction: 'sent' as const, subject: 'RE: P251556 초안 검토 요청', senderName: '장진태', senderEmail: 'jang@example.com', to: '홍길동', cc: '', mailAt: '2026-09-10T02:00:00.000Z', body: '수정본을 내일까지 보내드리겠습니다.' },
     { entryId: 'mail-3', folderPath: '\\메일함\\받은 편지함', direction: 'received' as const, subject: 'PP251234 사건 등록', senderName: '고객', mailAt: '2026-09-11T03:00:00.000Z', body: '신규 사건 등록 요청입니다. 내부 단계 표시는 S1입니다.' },
   ];
@@ -171,6 +173,12 @@ try {
   assert.equal(first.imported, 3);
   assert.equal(first.linked, 3);
   assert.equal(first.affectedSummaries, 2);
+  withDatabase((db) => {
+    const evidence = JSON.parse(String((db.prepare("SELECT recipients_json FROM mail_item WHERE outlook_entry_id='mail-1'").get() as any).recipients_json));
+    assert.equal(evidence.storeDisplayName, 'jtjang@sspat.net');
+    assert.equal(evidence.recipients[0].smtpAddress, 'jtjang@sspat.net');
+    assert.match(evidence.recipientSnapshotHash, /^[0-9a-f]{64}$/);
+  });
   const second = importOutlookMail(records, { from: '2026-09-10T00:00:00.000Z', to: '2026-09-12T00:00:00.000Z', folders: ['받은 편지함', '보낸 편지함'] });
   assert.equal(second.imported, 0);
   assert.equal(second.skipped, 3);
