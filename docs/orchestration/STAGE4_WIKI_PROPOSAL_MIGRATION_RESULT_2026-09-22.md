@@ -54,6 +54,14 @@
 - `npm run build`: 성공
 - 격리 서버 필수 화면/API, Wiki scan, 빈 레거시 migration dry-run·조회 smoke: HTTP 200/201
 
+독립 회귀 평가:
+
+- 후보 커밋: `6e40470a6476434b1d4cc6feaf6bba2af5e8c360`
+- Runner 실행: `stage4-6e40470-001` (`wiki-dev-v1`, `SSPAT_RUNTIME_PROFILE=eval`, 격리 DB/Vault)
+- Grader 보고서: `상상업무자동화_EvalGrader/reports/stage4-6e40470-001.json`
+- 결과: **16/16 통과**. 산출물 hash, 문서 수·상태, DB 무결성, 본문 비저장, revision/history를 확인했다.
+- 범위: 이 평가는 WIKI-01 회귀 호환성 게이트다. WIKI-02 제안의 실제 모델 의미 품질이나 운영 이관 품질을 의미하지 않는다.
+
 ## 다음 단계
 
 단계 5의 UX-01과 EVAL-02를 진행한다. Figma에서 최신 파일·검토본·업무 상태·stale/conflict 표시를 승인한 뒤, 합성 대상 3~5개에서 편집→인덱스→제안→검토→수동 반영을 통합 평가한다.
