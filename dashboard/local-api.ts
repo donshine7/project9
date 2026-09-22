@@ -50,6 +50,14 @@ import {
   wikiMarkdownScanIssues,
 } from './lib/wiki-markdown';
 import {
+  ingestWikiMarkdownProposal,
+  prepareWikiMarkdownProposal,
+  reconcileWikiMarkdownProposal,
+  reviewWikiMarkdownProposal,
+  wikiMarkdownProposalDetail,
+} from './lib/wiki-proposal';
+import { runLegacyWikiMigrationDryRun, wikiMigrationRun } from './lib/wiki-migration';
+import {
   completeWorkRefreshStage,
   createWorkRefresh,
   failWorkRefreshStage,
@@ -354,7 +362,11 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
   const wikiReviewRoute = pathname.match(/^\/api\/wiki\/drafts\/([^/]+)\/review$/);
   const wikiEvidenceRoute = pathname.match(/^\/api\/wiki\/evidence\/([^/]+)$/);
   const wikiMarkdownDocumentRoute = pathname.match(/^\/api\/wiki-markdown\/documents\/([^/]+)$/);
+  const wikiMarkdownProposalPrepareRoute = pathname.match(/^\/api\/wiki-markdown\/documents\/([^/]+)\/proposals\/prepare$/);
+  const wikiMarkdownProposalRoute = pathname.match(/^\/api\/wiki-markdown\/proposals\/([^/]+)$/);
+  const wikiMarkdownProposalActionRoute = pathname.match(/^\/api\/wiki-markdown\/proposals\/([^/]+)\/(reconcile|reviews)$/);
   const wikiMarkdownScanIssuesRoute = pathname.match(/^\/api\/wiki-markdown\/scans\/([^/]+)\/issues$/);
+  const wikiMigrationRoute = pathname.match(/^\/api\/wiki-migrations\/([^/]+)$/);
   const matterRoute = pathname.match(/^\/api\/matters\/([^/]+)$/);
   const matterChildRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(work-items|notes|actions)$/);
   const relationRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(organizations|people|groups)$/);
@@ -404,8 +416,10 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     || pathname === '/api/wiki'
     || pathname === '/api/wiki-markdown'
     || pathname === '/api/wiki-markdown/scans'
+    || pathname === '/api/wiki-markdown/proposals'
+    || pathname === '/api/wiki-migrations/legacy-dry-runs'
     || Boolean(wikiRoute || wikiReviewRoute || wikiEvidenceRoute)
-    || Boolean(wikiMarkdownDocumentRoute || wikiMarkdownScanIssuesRoute)
+    || Boolean(wikiMarkdownDocumentRoute || wikiMarkdownProposalPrepareRoute || wikiMarkdownProposalRoute || wikiMarkdownProposalActionRoute || wikiMarkdownScanIssuesRoute || wikiMigrationRoute)
     || Boolean(workRefreshRoute || workRefreshStageCreateRoute || workRefreshStageRoute || workRefreshResultRoute || workRefreshFinalizeRoute)
     || Boolean(downloadNoticeRoute || downloadNoticeRecheckRoute || downloadNoticePreviewRoute || downloadNoticeProjectRoute || downloadNoticeProjectLinkRoute || downloadJobEventsRoute || downloadJobResumeRoute)
     || Boolean(responseProjectRoute || responseReconcileRoute || responseStageRoute || responseApprovalRoute || responseTaskRoute)
@@ -462,6 +476,20 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     if (req.method === 'GET' && pathname === '/api/wiki') return { status: 200, payload: { entities: wikiIndex(requestUrl.searchParams.get('q') || '') } };
     if (req.method === 'GET' && pathname === '/api/wiki-markdown') return { status: 200, payload: wikiMarkdownIndex() };
     if (req.method === 'POST' && pathname === '/api/wiki-markdown/scans') return { status: 201, payload: await scanWikiMarkdownVault() };
+    if (req.method === 'POST' && wikiMarkdownProposalPrepareRoute) return { status: 201, payload: await prepareWikiMarkdownProposal(decodeURIComponent(wikiMarkdownProposalPrepareRoute[1])) };
+    if (req.method === 'POST' && pathname === '/api/wiki-markdown/proposals') return { status: 201, payload: await ingestWikiMarkdownProposal(await readBody(req, 3 * 1024 * 1024)) };
+    if (req.method === 'GET' && wikiMarkdownProposalRoute && !wikiMarkdownProposalActionRoute) return { status: 200, payload: wikiMarkdownProposalDetail(decodeURIComponent(wikiMarkdownProposalRoute[1])) };
+    if (req.method === 'POST' && wikiMarkdownProposalActionRoute) {
+      const proposalId = decodeURIComponent(wikiMarkdownProposalActionRoute[1]);
+      if (wikiMarkdownProposalActionRoute[2] === 'reconcile') return { status: 200, payload: await reconcileWikiMarkdownProposal(proposalId) };
+      const body = await readBody(req, 16 * 1024);
+      return { status: 200, payload: await reviewWikiMarkdownProposal(proposalId, body.action, body.expectedVersion, body.reviewer) };
+    }
+    if (req.method === 'POST' && pathname === '/api/wiki-migrations/legacy-dry-runs') {
+      const body = await readBody(req, 16 * 1024);
+      return { status: 201, payload: runLegacyWikiMigrationDryRun(body.outputRoot, body.conversionVersion) };
+    }
+    if (req.method === 'GET' && wikiMigrationRoute) return { status: 200, payload: wikiMigrationRun(decodeURIComponent(wikiMigrationRoute[1])) };
     if (req.method === 'GET' && wikiMarkdownDocumentRoute) return { status: 200, payload: await wikiMarkdownDetail(decodeURIComponent(wikiMarkdownDocumentRoute[1])) };
     if (req.method === 'GET' && wikiMarkdownScanIssuesRoute) return { status: 200, payload: { issues: wikiMarkdownScanIssues(decodeURIComponent(wikiMarkdownScanIssuesRoute[1])) } };
     if (req.method === 'GET' && wikiEvidenceRoute) return { status: 200, payload: wikiEvidence(decodeURIComponent(wikiEvidenceRoute[1])) };

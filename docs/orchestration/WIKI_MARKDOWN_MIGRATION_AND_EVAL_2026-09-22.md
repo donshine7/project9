@@ -1,6 +1,6 @@
 # Wiki 원본 전환 — 이관·복구·Eval 실행 계약 v2
 
-대상 기획: `WIKI_MARKDOWN_MASTER_PLAN_2026-09-22.md`. 아래는 구현 계약이며 실행 결과가 아니다.
+대상 기획: `WIKI_MARKDOWN_MASTER_PLAN_2026-09-22.md`. WIKI-02·MIG-01의 합성 구현 결과는 `STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md`에 기록하며, 아래 계약 중 운영 전환·복구·확대 항목은 아직 실행 결과가 아니다.
 
 ## 1. 현재 코드에서 변경해야 하는 지점
 

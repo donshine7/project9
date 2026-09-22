@@ -370,6 +370,48 @@ export function wikiMarkdownIndex() {
   }));
 }
 
+export async function readWikiMarkdownSource(docId: string) {
+  const indexed = withDatabase((db) => {
+    const document = db.prepare('SELECT * FROM wiki_document WHERE doc_id=?').get(docId) as Record<string, any> | undefined;
+    if (!document) throw new WorkDbError('Markdown Wiki 문서를 찾을 수 없습니다.', 404, 'WIKI_MARKDOWN_NOT_FOUND');
+    if (document.parse_status !== 'valid') throw new WorkDbError('유효한 최신 Markdown Wiki 문서가 필요합니다.', 409, 'WIKI_MARKDOWN_NOT_VALID');
+    const revision = document.current_revision_id
+      ? db.prepare('SELECT * FROM wiki_markdown_revision WHERE id=?').get(document.current_revision_id) as Record<string, any> | undefined
+      : undefined;
+    return { document, revision: revision ?? null };
+  });
+  const vaultRoot = resolveWikiVaultPath();
+  const vaultStat = await lstat(vaultRoot);
+  if (!vaultStat.isDirectory() || vaultStat.isSymbolicLink()) throw new WorkDbError('Wiki Vault 루트는 실제 디렉터리여야 합니다.', 409, 'WIKI_VAULT_INVALID');
+  const resolvedVault = await realpath(vaultRoot);
+  const target = path.resolve(vaultRoot, ...String(indexed.document.relative_path).split('/'));
+  let resolvedTarget: string;
+  try {
+    const targetStat = await lstat(target);
+    if (!targetStat.isFile() || targetStat.isSymbolicLink()) throw new Error('실제 Markdown 파일이 아닙니다.');
+    resolvedTarget = await realpath(target);
+  } catch {
+    throw new WorkDbError('Markdown Wiki 원본 파일이 없습니다.', 409, 'WIKI_MARKDOWN_SOURCE_MISSING');
+  }
+  if (!pathIsInside(resolvedVault, resolvedTarget)) throw new WorkDbError('Wiki 문서 경로가 Vault를 벗어났습니다.', 409, 'WIKI_PATH_ESCAPE_BLOCKED');
+  const bytes = await readFile(resolvedTarget);
+  const parsed = parseWikiMarkdown(bytes);
+  if (parsed.frontmatter.doc_id !== docId) throw new WorkDbError('파일의 doc_id가 인덱스와 다릅니다.', 409, 'WIKI_IDENTITY_MISMATCH');
+  const byteHash = sha256(bytes);
+  return {
+    ...indexed,
+    vaultRoot,
+    absolutePath: resolvedTarget,
+    bytes,
+    byteHash,
+    textHash: sha256(parsed.normalized),
+    indexStale: byteHash !== indexed.document.byte_hash,
+    frontmatter: parsed.frontmatter,
+    markdown: parsed.body,
+    normalized: parsed.normalized,
+  };
+}
+
 export async function wikiMarkdownDetail(docId: string) {
   const document = withDatabase((db) => {
     const row = db.prepare('SELECT * FROM wiki_document WHERE doc_id=?').get(docId) as Record<string, any> | undefined;

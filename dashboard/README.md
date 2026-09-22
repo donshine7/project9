@@ -45,6 +45,22 @@
 
 파서·수정·이동·누락·이력·경로 탈출 검사는 `npm run test:wiki-markdown`으로 실행합니다. 합성 평가는 `npm run eval:wiki:runner`가 정답 없이 실행물을 고정하고, 별도 프로젝트의 `npm run eval:wiki:grader`가 hash와 기대값을 검사합니다. 폴더 초기화와 매 실행 절차는 `../eval/README.md`를 따릅니다.
 
+### AI 개정 제안
+
+`npm run wiki:proposal -- prepare DOC_ID`로 현재 Markdown과 admissible event/source hash를 동결합니다. 반환된 run은 기존 `npm run analysis -- bind RUN_ID AGENT_ID MODEL EFFORT`로 실제 `wiki_synthesizer` 실행과 연결하고, `npm run wiki:proposal -- packet RUN_ID`를 입력으로 사용합니다. 모델 출력 JSON은 `npm run wiki:proposal -- ingest JSON_PATH`로 검증합니다.
+
+제안은 `80_Proposals`에만 생성되며 활성 Markdown을 자동 수정하지 않습니다. `review PROPOSAL_ID accept_for_manual_apply EXPECTED_VERSION`은 사람이 반영할 수 있다는 검토만 기록합니다. 실제 적용은 Obsidian에서 수행하고 재스캔 후 `reconcile PROPOSAL_ID`로 target hash 일치를 확인합니다. base 문서나 근거가 바뀐 제안은 stale로 차단됩니다.
+
+### 레거시 Wiki dry-run
+
+승인된 격리 DB 사본에서만 다음을 실행합니다.
+
+```powershell
+npm run wiki:migrate:dry-run -- --output-root '<SSPAT_ISOLATED_ROOT>\migration-runs\legacy-v1'
+```
+
+게시 개정은 history/active 후보로, pending·rejected 초안은 proposals로 분리됩니다. 실제 업무 Vault와 레거시 DB 행, source mode는 바꾸지 않습니다. 기존 출력 폴더는 manifest와 모든 산출물 hash가 일치할 때만 멱등 재실행으로 인정합니다. 합성 회귀는 `npm run test:wiki-stage4`로 실행합니다.
+
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.
 # 3단계 분석·검토
 

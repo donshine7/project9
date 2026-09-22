@@ -8,6 +8,8 @@
 .client-test/
 .environment-test/
 .wiki-markdown-test/
+.wiki-stage4-test/
+.wiki-stage4/
 .wiki-eval/
 .eval-runs/
 .registration-test/
