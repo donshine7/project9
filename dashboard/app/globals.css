@@ -18,8 +18,32 @@
   --amber: #ad7418;
   --amber-soft: #fff2d7;
   --danger: #b84b4b;
+  --danger-soft: #fff0f0;
+  --positive-text: #08755c;
+  --info-text: #245ba9;
+  --warning-text: #865706;
+  --danger-text: #9b3e3e;
+  --positive-border: #b7e0d5;
+  --info-border: #a0bee2;
   --shadow: 0 12px 32px rgb(22 38 66 / 7%);
   --radius: 16px;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+  --control-sm: 36px;
+  --control-md: 44px;
 }
 
 * {
@@ -2009,3 +2033,48 @@ footer div {
 @media (max-width: 1100px) { .spec-metrics { grid-template-columns: repeat(3, 1fr); }.spec-setup-steps { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 850px) { .spec-header { grid-template-columns: auto 1fr auto; }.spec-header > div { text-align: left; }.spec-hero > svg { display: none; }.spec-form-grid { grid-template-columns: 1fr 1fr; }.spec-layout { grid-template-columns: 1fr; }.spec-project-list { max-height: 350px; }.spec-filters { grid-template-columns: auto 1fr 1fr; }.spec-filters label, .spec-filters button { grid-column: auto; }.spec-paths, .spec-history { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .spec-header > div span { display: none; }.spec-header > button { font-size: 0; }.spec-metrics, .spec-form-grid, .spec-setup-steps, .spec-review-grid { grid-template-columns: 1fr 1fr; }.spec-form-grid .wide, .spec-form-grid > button, .spec-review-grid > section.wide { grid-column: 1 / -1; }.spec-filters { grid-template-columns: auto 1fr; }.spec-filters select, .spec-filters label, .spec-filters button { grid-column: 2; }.spec-human-form { grid-template-columns: 1fr; }.spec-human-form p { grid-column: 1; } }
+
+/* Markdown-first Wiki review */
+.wiki-review-shell { min-height: 100vh; background: var(--paper); color: var(--ink); }
+.wiki-review-header { position: sticky; top: 0; z-index: 30; display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: var(--space-24); padding: 0 var(--space-32); background: var(--navy); color: white; }
+.wiki-review-brand, .wiki-review-header-actions { display: flex; align-items: center; gap: var(--space-16); }
+.wiki-review-brand a { font-size: 18px; font-weight: 800; }.wiki-review-brand span { color: #ccd5e3; font-size: 13px; font-weight: 650; }
+.wiki-review-environment { color: #b4c1d3; font-size: 10px; font-weight: 750; letter-spacing: .08em; }
+.wiki-review-notice { position: sticky; top: 72px; z-index: 25; margin: 0; padding: 10px var(--space-32); border-bottom: 1px solid var(--info-border); background: var(--blue-soft); color: var(--info-text); font-size: 12px; }
+.wiki-review-grid { display: grid; grid-template-columns: minmax(300px, 340px) minmax(520px, 1fr) minmax(300px, 344px); align-items: stretch; gap: var(--space-24); min-height: calc(100vh - 72px); padding: var(--space-24); }
+.wiki-review-panel { min-width: 0; padding: var(--space-24); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--surface); box-shadow: 0 6px 18px rgb(22 38 66 / 3%); }
+.wiki-review-panel-heading, .wiki-review-title-row, .wiki-review-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-16); }
+.wiki-review-panel-heading h1, .wiki-review-panel-heading h2, .wiki-review-title-row h2, .wiki-review-section-heading h3 { margin: 0; letter-spacing: -.025em; }
+.wiki-review-panel-heading h1, .wiki-review-panel-heading h2 { font-size: 20px; }.wiki-review-title-row h2 { font-size: 20px; }.wiki-review-section-heading h3 { font-size: 16px; }
+.wiki-review-panel-heading p, .wiki-review-title-row p, .wiki-review-section-heading p { margin: 6px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+.wiki-review-search { display: flex; min-height: var(--control-md); align-items: center; gap: var(--space-8); margin-top: var(--space-16); padding: 0 var(--space-12); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); color: var(--ink-soft); }
+.wiki-review-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
+.wiki-review-tabs, .wiki-review-source-tabs { display: flex; align-items: flex-end; gap: var(--space-8); margin-top: var(--space-12); border-bottom: 1px solid var(--line); }
+.wiki-review-tab { min-height: 42px; padding: 0 var(--space-16); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ink-soft); font-size: 12px; font-weight: 650; }
+.wiki-review-tab:hover, .wiki-review-tab:focus-visible { color: var(--ink); outline: 2px solid transparent; }.wiki-review-tab.is-active { border-color: var(--violet); color: var(--ink); font-weight: 800; }
+.wiki-review-document-list, .wiki-review-evidence-list { display: grid; gap: var(--space-12); margin-top: var(--space-16); }
+.wiki-review-document { position: relative; display: grid; width: 100%; gap: var(--space-6); padding: var(--space-16); border: 1px solid var(--line); border-left-width: 3px; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); text-align: left; }
+.wiki-review-document:hover, .wiki-review-document:focus-visible { border-color: var(--info-border); outline: none; }.wiki-review-document.is-selected { border-color: var(--violet); border-left-width: 4px; background: var(--violet-soft); }.wiki-review-document.is-warning { border-color: var(--amber); border-left-width: 4px; background: var(--amber-soft); }
+.wiki-review-document-type { color: var(--ink-soft); font-size: 9px; font-weight: 750; letter-spacing: .05em; }.wiki-review-document-title { padding-right: 86px; font-size: 12px; font-weight: 800; }.wiki-review-document-meta { overflow: hidden; color: var(--ink-soft); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }.wiki-review-document .wiki-review-badge { position: absolute; top: var(--space-16); right: var(--space-12); }
+.wiki-review-badge { display: inline-flex; min-height: 28px; align-items: center; gap: var(--space-6); padding: 0 var(--space-10); border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--paper); color: var(--ink-soft); font-size: 10px; font-weight: 750; white-space: nowrap; }
+.wiki-review-badge-dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentcolor; }
+.wiki-review-badge.is-reviewed { border-color: #c7b8ef; background: var(--violet-soft); color: var(--violet); }.wiki-review-badge.is-needs_review, .wiki-review-badge.is-duplicate_id { border-color: #dbb96f; background: var(--amber-soft); color: var(--warning-text); }.wiki-review-badge.is-evidence_stale, .wiki-review-badge.is-missing, .wiki-review-badge.is-conflict { border-color: #df9f9f; background: var(--danger-soft); color: var(--danger-text); }.wiki-review-badge.is-indexing { border-color: var(--info-border); background: var(--blue-soft); color: var(--info-text); }.wiki-review-badge.is-up_to_date { border-color: var(--positive-border); background: var(--mint-soft); color: var(--positive-text); }
+.wiki-review-button { display: inline-flex; min-height: 39px; align-items: center; justify-content: center; padding: 0 var(--space-16); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.wiki-review-button:hover, .wiki-review-button:focus-visible { border-color: var(--violet); outline: none; }.wiki-review-button.is-primary { border-color: var(--navy); background: var(--navy); color: white; }.wiki-review-button.is-danger { border-color: var(--danger); background: var(--danger-soft); color: var(--danger-text); }.wiki-review-button:disabled { cursor: not-allowed; opacity: .55; }
+.wiki-review-main { display: flex; flex-direction: column; gap: var(--space-16); }.wiki-review-source-tabs { margin-top: 0; }
+.wiki-review-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-12); }
+.wiki-review-source-card, .wiki-review-proposal, .wiki-review-markdown-panel { min-width: 0; padding: var(--space-16); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--paper); }
+.wiki-review-source-card.is-markdown { border-color: var(--violet); background: var(--surface); }.wiki-review-source-card h3, .wiki-review-proposal h3, .wiki-review-provenance h3, .wiki-review-human-gate h3 { margin: 0; font-size: 13px; }
+.wiki-review-source-card dl, .wiki-review-proposal-hashes { display: grid; gap: var(--space-8); margin: var(--space-12) 0 0; }.wiki-review-source-card dl div, .wiki-review-proposal-hashes div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: var(--space-8); font-size: 10px; }.wiki-review-source-card dt, .wiki-review-proposal-hashes dt { color: var(--ink-soft); }.wiki-review-source-card dd, .wiki-review-proposal-hashes dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 650; }
+.wiki-review-state-card { display: flex; align-items: center; justify-content: space-between; gap: var(--space-16); padding: var(--space-16); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--paper); }.wiki-review-state-card h3 { margin: 0; font-size: 13px; }.wiki-review-state-card p { margin: var(--space-8) 0 0; color: var(--ink-soft); font-size: 10px; }
+.wiki-review-state-card.is-needs_review, .wiki-review-state-card.is-duplicate_id { border-color: var(--amber); background: var(--amber-soft); color: var(--warning-text); }.wiki-review-state-card.is-evidence_stale, .wiki-review-state-card.is-missing, .wiki-review-state-card.is-conflict { border-color: var(--danger); background: var(--danger-soft); color: var(--danger-text); }.wiki-review-state-card.is-reviewed { border-color: var(--violet); background: var(--violet-soft); }.wiki-review-state-card.is-up_to_date { border-color: var(--positive-border); background: var(--mint-soft); color: var(--positive-text); }.wiki-review-state-card.is-indexing { border-color: var(--info-border); background: var(--blue-soft); color: var(--info-text); }
+.wiki-review-proposal { background: var(--surface); }.wiki-review-proposal-status { color: var(--ink-soft); font-size: 10px; font-weight: 750; }.wiki-review-change-summary { margin: var(--space-16) 0 0; padding: var(--space-12); border-left: 3px solid var(--violet); background: var(--violet-soft); font-size: 11px; }
+.wiki-review-markdown-panel summary { cursor: pointer; font-size: 12px; font-weight: 800; }.wiki-review-markdown-panel pre { max-height: 300px; margin: var(--space-16) 0 0; overflow: auto; color: #405169; font: 10px/1.65 "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; }
+.wiki-review-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-8); margin-top: auto; }
+.wiki-review-provenance { margin-top: var(--space-16); padding: var(--space-16); border: 1px solid var(--info-border); border-radius: var(--radius-md); background: var(--blue-soft); color: var(--info-text); }.wiki-review-provenance p, .wiki-review-human-gate p { margin: var(--space-8) 0 0; font-size: 10px; line-height: 1.55; overflow-wrap: anywhere; }
+.wiki-review-evidence-card { display: grid; gap: var(--space-8); padding: var(--space-16); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }.wiki-review-evidence-card.is-warning { border-color: var(--amber); background: var(--amber-soft); }.wiki-review-evidence-card > div { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }.wiki-review-evidence-card strong { overflow-wrap: anywhere; font-size: 10px; }.wiki-review-evidence-card p { margin: 0; font-size: 11px; font-weight: 750; }.wiki-review-evidence-card span { color: var(--ink-soft); font-size: 9px; }
+.wiki-review-human-gate { margin-top: var(--space-16); padding: var(--space-16); border-radius: var(--radius-md); background: var(--paper); }
+.wiki-review-empty { margin: 0; padding: var(--space-20); border-radius: var(--radius-md); background: var(--paper); color: var(--ink-soft); font-size: 11px; line-height: 1.6; text-align: center; }
+@media (max-width: 1240px) { .wiki-review-grid { grid-template-columns: minmax(280px, 330px) minmax(520px, 1fr); }.wiki-review-evidence { grid-column: 1 / -1; }.wiki-review-evidence-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .wiki-review-header { align-items: flex-start; flex-direction: column; padding-block: var(--space-16); }.wiki-review-header-actions { width: 100%; justify-content: space-between; }.wiki-review-grid { grid-template-columns: 1fr; }.wiki-review-comparison, .wiki-review-evidence-list { grid-template-columns: 1fr; }.wiki-review-sidebar { max-height: 520px; } }
+@media (max-width: 560px) { .wiki-review-environment { display: none; }.wiki-review-brand { align-items: flex-start; flex-direction: column; gap: var(--space-4); }.wiki-review-grid { padding: var(--space-12); }.wiki-review-panel { padding: var(--space-16); }.wiki-review-title-row, .wiki-review-state-card { align-items: flex-start; flex-direction: column; }.wiki-review-actions { justify-content: stretch; }.wiki-review-actions .wiki-review-button { flex: 1; } }
