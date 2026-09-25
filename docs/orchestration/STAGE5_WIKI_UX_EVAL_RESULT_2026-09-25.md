@@ -29,7 +29,10 @@
 - 흐름: 초기 scan → 사람 편집 → 재scan → 제안 생성 → 사람 검토 → 수동 반영 → 재scan/reconcile → 검토 UI 상태 집계
 - 치명 조건: 자동 원본 반영, 검토 전 활성 Markdown 변경, 산출물 hash 불일치, 문서/상태 누락은 실패로 판정한다.
 - 사전 검증 run `stage5-precommit-001`: **39/39 통과**. `automaticApply=false`, 제안 4건 모두 `applied_observed`, 최종 UI 상태 4건 모두 `up_to_date`다.
-- 깨끗한 후보 커밋 기준 최종 run: 첫 구현 커밋 후 별도 Runner/Grader에서 재실행해 이 문서에 기록한다.
+- 최종 후보 커밋: `b5f7c2ae81e50fdf13c0e81facc5135bc540f993` (`gitDirty=false`)
+- 최종 Runner run: `stage5-b5f7c2a-001`
+- 최종 Grader 보고서: `상상업무자동화_EvalGrader/reports/stage5-b5f7c2a-001.json`
+- 최종 결과: **39/39 통과**. DB quick check, DB/Vault/결과/index hash, 문서별 trace와 target hash, 자동 반영 금지를 모두 확인했다.
 
 ## 자동·스모크 검증
 
