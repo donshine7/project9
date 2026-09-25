@@ -1,0 +1,41 @@
+{
+  "schema": "wiki-vertical-eval-scenarios-v1",
+  "scenarios": [
+    {
+      "id": "vertical-001",
+      "docId": "wiki-vertical-matter-001",
+      "relativePath": "10_Matters/P260601-KR.md",
+      "entityId": "vertical-matter-001",
+      "eventId": "vertical-event-001",
+      "editedBody": "사람이 선행기술 대비 핵심 차이를 검토했습니다.",
+      "proposedBody": "선행기술 대비 핵심 차이 검토 완료 사실을 반영했습니다."
+    },
+    {
+      "id": "vertical-002",
+      "docId": "wiki-vertical-matter-002",
+      "relativePath": "10_Matters/P260602-CN-PA.md",
+      "entityId": "vertical-matter-002",
+      "eventId": "vertical-event-002",
+      "editedBody": "사람이 중국 가출원 제출 자료를 확인했습니다.",
+      "proposedBody": "중국 가출원 제출 자료 확인 완료 사실을 반영했습니다."
+    },
+    {
+      "id": "vertical-003",
+      "docId": "wiki-vertical-matter-003",
+      "relativePath": "10_Matters/D260603-KR.md",
+      "entityId": "vertical-matter-003",
+      "eventId": "vertical-event-003",
+      "editedBody": "사람이 디자인 도면 세트를 검수했습니다.",
+      "proposedBody": "디자인 도면 세트 검수 완료 사실을 반영했습니다."
+    },
+    {
+      "id": "vertical-004",
+      "docId": "wiki-vertical-matter-004",
+      "relativePath": "10_Matters/T260604-KR.md",
+      "entityId": "vertical-matter-004",
+      "eventId": "vertical-event-004",
+      "editedBody": "사람이 지정상품 분류를 검토했습니다.",
+      "proposedBody": "지정상품 분류 검토 완료 사실을 반영했습니다."
+    }
+  ]
+}

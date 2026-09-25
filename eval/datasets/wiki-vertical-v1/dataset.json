@@ -1,0 +1,7 @@
+{
+  "schema": "wiki-vertical-eval-dataset-v1",
+  "id": "wiki-vertical-v1",
+  "inputRoot": "input",
+  "seed": "seed.json",
+  "scenarios": "scenarios.json"
+}

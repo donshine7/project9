@@ -1,0 +1,14 @@
+{
+  "schema": "wiki-vertical-eval-expected-v1",
+  "datasetId": "wiki-vertical-v1",
+  "targetCount": 4,
+  "proposalStatus": "applied_observed",
+  "finalReviewStatus": "up_to_date",
+  "automaticApply": false,
+  "documents": [
+    "wiki-vertical-matter-001",
+    "wiki-vertical-matter-002",
+    "wiki-vertical-matter-003",
+    "wiki-vertical-matter-004"
+  ]
+}

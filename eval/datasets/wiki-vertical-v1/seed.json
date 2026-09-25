@@ -1,0 +1,61 @@
+{
+  "schema": "wiki-vertical-eval-seed-v1",
+  "matters": [
+    {
+      "id": "vertical-matter-001",
+      "ourRef": "P260601-KR",
+      "office": "상상특허",
+      "matterKind": "patent",
+      "countryCode": "KR",
+      "baseRef": "P260601",
+      "parentRef": null,
+      "relationType": null,
+      "suffixes": ["KR"],
+      "eventId": "vertical-event-001",
+      "entryId": "vertical-entry-001",
+      "fact": "선행기술 대비 핵심 차이 검토 완료"
+    },
+    {
+      "id": "vertical-matter-002",
+      "ourRef": "P260602-CN(PA)",
+      "office": "상상특허",
+      "matterKind": "foreign_provisional",
+      "countryCode": "CN",
+      "baseRef": "P260602",
+      "parentRef": null,
+      "relationType": null,
+      "suffixes": ["CN", "PA"],
+      "eventId": "vertical-event-002",
+      "entryId": "vertical-entry-002",
+      "fact": "중국 가출원 제출 자료 확인 완료"
+    },
+    {
+      "id": "vertical-matter-003",
+      "ourRef": "D260603-KR",
+      "office": "상상특허",
+      "matterKind": "design",
+      "countryCode": "KR",
+      "baseRef": "D260603",
+      "parentRef": null,
+      "relationType": null,
+      "suffixes": ["KR"],
+      "eventId": "vertical-event-003",
+      "entryId": "vertical-entry-003",
+      "fact": "디자인 도면 세트 검수 완료"
+    },
+    {
+      "id": "vertical-matter-004",
+      "ourRef": "T260604-KR",
+      "office": "상상특허",
+      "matterKind": "trademark",
+      "countryCode": "KR",
+      "baseRef": "T260604",
+      "parentRef": null,
+      "relationType": null,
+      "suffixes": ["KR"],
+      "eventId": "vertical-event-004",
+      "entryId": "vertical-entry-004",
+      "fact": "지정상품 분류 검토 완료"
+    }
+  ]
+}

@@ -38,7 +38,9 @@ try {
   Copy-Item -LiteralPath (Join-Path $repositoryRoot 'eval\contracts\wiki-eval-run-manifest.schema.json') -Destination (Join-Path $runnerPath 'contracts')
   Copy-Item -LiteralPath (Join-Path $repositoryRoot 'eval\contracts\wiki-eval-run-manifest.schema.json') -Destination (Join-Path $graderPath 'contracts')
   Copy-Item -LiteralPath (Join-Path $repositoryRoot 'eval\datasets\wiki-dev-v1') -Destination (Join-Path $runnerPath 'datasets') -Recurse
+  Copy-Item -LiteralPath (Join-Path $repositoryRoot 'eval\datasets\wiki-vertical-v1') -Destination (Join-Path $runnerPath 'datasets') -Recurse
   Copy-Item -LiteralPath (Join-Path $repositoryRoot 'eval\graders\dev\wiki-dev-v1.expected.json') -Destination (Join-Path $graderPath 'graders\dev')
+  Copy-Item -LiteralPath (Join-Path $repositoryRoot 'eval\graders\dev\wiki-vertical-v1.expected.json') -Destination (Join-Path $graderPath 'graders\dev')
 
   $runnerForbidden = Get-ChildItem -LiteralPath $runnerPath -Recurse -File |
     Where-Object { $_.Name -match '(?i)(expected|answer|holdout|rubric|grader)' }

@@ -11,6 +11,9 @@
 .wiki-stage4-test/
 .wiki-stage4/
 .wiki-eval/
+.wiki-stage5-test/
+.wiki-eval-vertical/
+.smoke-runtime/
 .eval-runs/
 .registration-test/
 .analysis-ingest/

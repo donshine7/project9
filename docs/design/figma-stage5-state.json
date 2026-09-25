@@ -1,0 +1,113 @@
+{
+  "runId": "stage5-wiki-ux-2026-09-22",
+  "fileKey": "Jza7Umf9gezhYcmleHJoAf",
+  "fileUrl": "https://www.figma.com/design/Jza7Umf9gezhYcmleHJoAf",
+  "phase": "complete",
+  "step": "P4.c",
+  "status": "complete",
+  "entities": {
+    "collections": {
+      "Primitives": "VariableCollectionId:2:2",
+      "Semantic": "VariableCollectionId:2:3",
+      "Dimensions": "VariableCollectionId:2:4"
+    },
+    "variables": {
+      "primitiveColorIds": [
+        "VariableID:3:2", "VariableID:3:3", "VariableID:3:4", "VariableID:3:5",
+        "VariableID:3:6", "VariableID:3:7", "VariableID:3:8", "VariableID:3:9",
+        "VariableID:3:10", "VariableID:3:11", "VariableID:3:12", "VariableID:3:13",
+        "VariableID:3:14", "VariableID:3:15", "VariableID:3:16", "VariableID:3:17",
+        "VariableID:3:18", "VariableID:3:19", "VariableID:3:20", "VariableID:3:21",
+        "VariableID:3:22", "VariableID:3:23", "VariableID:3:24", "VariableID:3:25"
+      ],
+      "semanticBackgroundIds": [
+        "VariableID:4:2", "VariableID:4:3", "VariableID:4:4", "VariableID:4:5",
+        "VariableID:4:6", "VariableID:4:7", "VariableID:4:8", "VariableID:4:9"
+      ],
+      "semanticTextIds": [
+        "VariableID:4:10", "VariableID:4:11", "VariableID:4:12", "VariableID:4:13",
+        "VariableID:4:14", "VariableID:4:15", "VariableID:4:16", "VariableID:4:17"
+      ],
+      "semanticBorderIds": [
+        "VariableID:9:2", "VariableID:9:3", "VariableID:9:4", "VariableID:9:5",
+        "VariableID:9:6", "VariableID:9:7", "VariableID:9:8"
+      ],
+      "dimensionIds": [
+        "VariableID:9:9", "VariableID:9:10", "VariableID:9:11", "VariableID:9:12",
+        "VariableID:9:13", "VariableID:9:14", "VariableID:9:15", "VariableID:9:16",
+        "VariableID:9:17", "VariableID:9:18", "VariableID:9:19", "VariableID:9:20",
+        "VariableID:9:21", "VariableID:9:22", "VariableID:9:23", "VariableID:9:24",
+        "VariableID:9:25"
+      ]
+    },
+    "styles": {
+      "text": [
+        "S:3506fe6837ee1c42d8a57e972af3ab518cc308d6,",
+        "S:d85a148a5f3cb589683482bdd986ed74394bfa56,",
+        "S:b4986aa1d0d9c1fc1947caf468e5814b19639520,",
+        "S:2f5d78b257d7a2575f1278a5a90b44082d2aa497,",
+        "S:57f6232016346427a971ed3db127e69ba5853c42,",
+        "S:b276a8461223497a4eef3c7a8ee089f14206d925,",
+        "S:ebba3cc892ff83bd21f978b02604562bc1d96225,"
+      ],
+      "effect": ["S:56782dd0a61aadf7e3c6dfd660760802591c9a0c,"]
+    },
+    "pages": {
+      "Cover": "0:1",
+      "Getting Started": "10:2",
+      "Foundations": "10:3",
+      "Separator 1": "10:4",
+      "Components": "10:6",
+      "Component / Button": "16:2",
+      "Component / StatusBadge": "17:2",
+      "Component / Tab": "18:2",
+      "Component / DocumentListItem": "19:2",
+      "Separator 2": "10:5",
+      "Utilities": "10:7",
+      "Wiki Review": "10:8"
+    },
+    "pageRoots": {
+      "Cover": "11:2",
+      "Getting Started": "12:2",
+      "Foundations": "13:2",
+      "Components": "22:2",
+      "Utilities": "28:2"
+    },
+    "components": {
+      "Button": "16:21",
+      "StatusBadge": "17:34",
+      "Tab": "18:16",
+      "DocumentListItem": "19:23"
+    },
+    "screens": {
+      "Wiki Review / Desktop": "23:2"
+    },
+    "codeConnect": {
+      "status": "deferred_until_library_publish",
+      "mappingDocument": "docs/design/wiki-review-code-map.md"
+    }
+  },
+  "pendingValidations": [],
+  "completedSteps": [
+    "phase0",
+    "P1.a",
+    "P1.b",
+    "P1.c",
+    "P1.d",
+    "P1.e",
+    "P1.f",
+    "P1.g",
+    "P1.h",
+    "P2.a",
+    "P2.b",
+    "P2.c",
+    "P3.a.button",
+    "P3.b.status-badge",
+    "P3.c.tab",
+    "P3.d.document-list-item",
+    "P3.e.component-index",
+    "P4.a.wiki-review-screen",
+    "P4.b.accessibility-and-binding-audit",
+    "P4.c.code-integration"
+  ]
+}

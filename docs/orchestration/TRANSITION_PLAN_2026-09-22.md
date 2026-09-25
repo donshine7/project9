@@ -1,6 +1,6 @@
 # 협업 전환 계획 — 2026-09-22
 
-상태: v2로 개정. 단계 4의 WIKI-02·MIG-01 완료, Wiki 본문 원본 전환은 아직 수행하지 않았다.
+상태: v3로 개정. 단계 5의 UX-01·EVAL-02 완료, Wiki 본문 원본 전환은 아직 수행하지 않았다.
 
 전체 작업의 현재 기준은 [Wiki Markdown 원본 전체 기획](WIKI_MARKDOWN_MASTER_PLAN_2026-09-22.md)과 [이관·복구·평가 계약](WIKI_MARKDOWN_MIGRATION_AND_EVAL_2026-09-22.md)이다. 사용자 요청에 따라 기존 단방향 export 목표를 대체한다. 아래는 개정 계획의 요약이다.
 
@@ -96,4 +96,6 @@
 
 단계 3의 WIKI-01·EVAL-01 구현, 별도 Runner/Grader 프로젝트와 합성 평가 결과는 [STAGE3_WIKI_EVAL_RESULT_2026-09-22.md](STAGE3_WIKI_EVAL_RESULT_2026-09-22.md)에 기록한다.
 
-단계 4의 hash 결합 AI 제안과 레거시 Wiki dry-run 결과는 [STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md](STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md)에 기록한다. 다음 단계는 Figma 기반 UX-01과 합성 수직 흐름 EVAL-02다.
+단계 4의 hash 결합 AI 제안과 레거시 Wiki dry-run 결과는 [STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md](STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md)에 기록한다.
+
+단계 5의 Figma 기반 Wiki 검토 화면과 합성 수직 흐름 39/39 결과는 [STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md](STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md)에 기록한다. 다음 단계는 허용된 소수 문서를 대상으로 하는 CUTOVER-01과 DB+Vault 사본 복원 RECOVERY-01이다.

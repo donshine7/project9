@@ -1,75 +1,415 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { readApiObject } from '../../lib/api-response';
+import {
+  Button,
+  DocumentListItem,
+  type ReviewStatus,
+  StatusBadge,
+  Tab,
+} from './components';
+
 type Row = Record<string, any>;
-const names: Record<string,string> = { matter: '사건', organization: '회사', person: '자연인', group: '그룹' };
+type ReviewDocument = {
+  docId: string;
+  title: string;
+  documentType: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  relativePath: string;
+  parseStatus: string;
+  currentByteHash?: string | null;
+  indexedByteHash?: string | null;
+  indexStale: boolean;
+  status: ReviewStatus;
+  statusLabel: string;
+  updatedAt: string;
+  latestProposal?: Row | null;
+};
+
+type ReviewIndex = {
+  documents: ReviewDocument[];
+  latestScan: Row | null;
+  counts: Record<string, number>;
+};
+
+type ReviewDetail = {
+  item: ReviewDocument;
+  source: Row | null;
+  database: Row | null;
+  proposal: Row | null;
+  latestScan: Row | null;
+};
+
 async function request(url: string, options?: RequestInit) {
-  const res = await fetch(url, options); const data = await res.json() as Row;
-  if (!res.ok) throw new Error(data.error || '요청을 처리하지 못했습니다.'); return data;
+  const response = await fetch(url, options);
+  return readApiObject(response);
 }
-function post(url: string, body: unknown) { return request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
-function viewUrl(type: string, id: string) { return `/wiki?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`; }
+
+function post(url: string, body?: unknown) {
+  return request(url, {
+    method: 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+function shortHash(value?: string | null) {
+  return value ? `sha256:${value.slice(0, 8)}…${value.slice(-4)}` : '없음';
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return '기록 없음';
+  return new Intl.DateTimeFormat('ko-KR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+function proposalStatusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    prepared: '파일 작성 준비',
+    ready_for_review: '검토 대기',
+    reviewed: '수동 반영 승인',
+    rejected: '반려',
+    stale_document: '문서 변경',
+    stale_evidence: '근거 변경',
+    applied_observed: '수동 반영 확인',
+    failed: '실패',
+  };
+  return status ? labels[status] ?? status : '제안 없음';
+}
 
 export default function WikiPage() {
-  const [entities,setEntities] = useState<Row[]>([]), [type,setType] = useState('matter'), [selected,setSelected] = useState(''), [detail,setDetail] = useState<Row|null>(null);
-  const [query,setQuery] = useState(''), [notice,setNotice] = useState(''), [busy,setBusy] = useState(false), [version,setVersion] = useState(0), [evidence,setEvidence] = useState<Row|null>(null);
-  const [editing,setEditing] = useState<Row|null>(null), [content,setContent] = useState(''), [entryDate,setEntryDate] = useState(() => new Date(Date.now()+9*3600_000).toISOString().slice(0,10));
-  const [note,setNote] = useState('');
-  const loadList = useCallback(async (q = '') => { const data = await request(`/api/wiki?q=${encodeURIComponent(q)}`); setEntities(data.entities); return data.entities as Row[]; }, []);
-  const loadDetail = useCallback(async (t: string, id: string) => {
-    const data = await request(`/api/wiki/${t}/${id}`); setDetail(data); setNote(data.entity.note || ''); setEvidence(null); return data;
+  const [index, setIndex] = useState<ReviewIndex>({ documents: [], latestScan: null, counts: {} });
+  const [selected, setSelected] = useState('');
+  const [detail, setDetail] = useState<ReviewDetail | null>(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'review' | 'issues'>('all');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const loadIndex = useCallback(async () => {
+    const data = await request('/api/wiki-review') as ReviewIndex;
+    setIndex(data);
+    return data.documents;
   }, []);
+
+  const loadDetail = useCallback(async (docId: string) => {
+    const data = await request(`/api/wiki-review/documents/${encodeURIComponent(docId)}`) as ReviewDetail;
+    setDetail(data);
+    return data;
+  }, []);
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const initialType = params.get('type') || 'matter';
-    setType(names[initialType] ? initialType : 'matter');
-    const initialQuery = params.get('q') || '';
-    setQuery(initialQuery);
-    loadList(initialQuery).then(list => setSelected(params.get('id') || list.find(e => e.type === initialType)?.id || '')).catch(e => setNotice(e.message));
-  }, [loadList]);
-  useEffect(() => { let cancelled = false; setDetail(null); if (selected) request(`/api/wiki/${type}/${selected}`).then(data => { if (!cancelled) { setDetail(data); setNote(data.entity.note || ''); setVersion(0); setEvidence(null); } }).catch(e => { if (!cancelled) setNotice(e.message); }); return () => { cancelled = true; }; }, [selected,type]);
-  async function perform(action: () => Promise<unknown>) {
-    setBusy(true); setNotice('');
-    try { await action(); await loadList(query); if (selected) await loadDetail(type,selected); setNotice('저장했습니다. 기존 Wiki는 보존되며 새 기록은 다음 개정에 반영됩니다.'); }
-    catch(e) { setNotice(e instanceof Error ? e.message : '저장 실패'); } finally { setBusy(false); }
+    loadIndex()
+      .then((documents) => setSelected((current) => current || documents[0]?.docId || ''))
+      .catch((error) => setNotice(error instanceof Error ? error.message : 'Wiki 목록을 불러오지 못했습니다.'));
+  }, [loadIndex]);
+
+  useEffect(() => {
+    if (!selected) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setDetail(null);
+    loadDetail(selected)
+      .catch((error) => {
+        if (!cancelled) setNotice(error instanceof Error ? error.message : 'Wiki 문서를 불러오지 못했습니다.');
+      });
+    return () => { cancelled = true; };
+  }, [loadDetail, selected]);
+
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('ko-KR');
+    return index.documents.filter((document) => {
+      const matchesQuery = !normalized
+        || document.title.toLocaleLowerCase('ko-KR').includes(normalized)
+        || document.docId.toLocaleLowerCase('ko-KR').includes(normalized)
+        || document.relativePath.toLocaleLowerCase('ko-KR').includes(normalized);
+      const matchesFilter = filter === 'all'
+        || (filter === 'review' && ['needs_review', 'evidence_stale', 'reviewed'].includes(document.status))
+        || (filter === 'issues' && ['missing', 'duplicate_id', 'conflict'].includes(document.status));
+      return matchesQuery && matchesFilter;
+    });
+  }, [filter, index.documents, query]);
+
+  async function perform(action: () => Promise<unknown>, success: string) {
+    setBusy(true);
+    setNotice('');
+    try {
+      await action();
+      const documents = await loadIndex();
+      if (selected && documents.some((document) => document.docId === selected)) await loadDetail(selected);
+      setNotice(success);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '작업을 완료하지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
   }
-  function choose(t: string, id: string) { if (busy || (t === type && id === selected)) return; setDetail(null); setType(t); setSelected(id); setEditing(null); setContent(''); setNotice(''); window.history.replaceState(null,'',viewUrl(t,id)); }
-  const revision = detail?.revisions.find((r: Row) => r.version === version) || detail?.revisions[0];
-  const previous = detail?.revisions.find((r: Row) => r.version === (revision?.version || 0)-1);
-  async function saveEntry(event: FormEvent) {
-    event.preventDefault(); await perform(async () => { await post(`/api/wiki/${type}/${selected}/entries`, { content, entryDate, expectedVersion: detail?.entity.row_version, supersedesId: editing?.id }); setContent(''); setEditing(null); });
-  }
-  return <div className="matter-shell"><header className="matter-header"><a href="/matters" className="provisional-brand">← 사건 업무관리</a><div className="matter-header-actions"><a href="/analysis" className="ghost-button">판단 검토</a><button className="ghost-button" disabled={busy} onClick={() => perform(async () => {})}>새로고침</button></div></header>
-    <main className="matter-main wiki-main"><h1>업무 Wiki</h1><p>현재 정보와 날짜별 기록을 근거와 함께 관리합니다.</p>
-      {notice && <p role="status" className="form-notice">{notice}</p>}
-      <div className="wiki-layout"><aside className="panel wiki-selector"><div className="wiki-tabs" role="group" aria-label="Wiki 유형">{Object.entries(names).map(([key,label]) => <button key={key} aria-pressed={type===key} onClick={() => choose(key,entities.find(e=>e.type===key)?.id || '')}>{label}</button>)}</div>
-        <form className="matter-search" onSubmit={e => { e.preventDefault(); loadList(query).catch(e=>setNotice(e.message)); }}><input aria-label="Wiki 검색" placeholder="관리번호·이름 검색" value={query} onChange={e=>setQuery(e.target.value)} /><button type="submit">검색</button></form>
-        <div className="matter-list">{entities.filter(e=>e.type===type).map(e=><button className={`matter-list-item ${e.id===selected?'selected':''}`} key={e.id} onClick={()=>choose(type,e.id)}><strong>{e.label}</strong><span>날짜 기록 {e.entryCount} · {e.version ? `Wiki v${e.version}` : '개정 전'}</span></button>)}</div>
-        {!entities.some(e=>e.type===type) && <p className="selector-empty">등록된 {names[type]}가 없습니다. 사건 화면에서 연결하면 여기에 표시됩니다.</p>}
-      </aside><section className="wiki-body">
-        {!detail && <section className="panel analysis-panel">{selected?'내용을 불러오는 중입니다.':'목록에서 대상을 선택하세요.'}</section>}
-        {detail && <><section className="panel analysis-panel"><div className="panel-heading"><h2>{detail.entity.our_ref || detail.entity.name || detail.entity.group_ref}</h2><span>{names[type]}</span></div>
-          <p>{detail.entity.office || detail.entity.email || ''} {detail.entity.user_confirmed===0 && '· 기본 정보는 메일 추정값'}</p>
-          {type === 'organization' && <p>회사 구분: {detail.entity.business_type || '미정'} · 개인사업자·법인·미정 중 하나로 관리합니다.</p>}
-          {type === 'group' && <><p>그룹 종류: {detail.entity.group_type || '미분류'} · 종류 변경은 사건 화면에서 가능합니다.</p><p>대표 사건: {detail.entity.representative_our_ref || '미지정'} · 구성원 {detail.entity.member_refs?.length || 0}건</p></>}
-          <div className="wiki-relations">{detail.related.map((r:Row,i:number)=><a key={`${r.type}-${r.id}-${i}`} href={viewUrl(r.type,r.id)}>{names[r.type]} · {r.label}</a>)}</div>
-          <label>사용자 비고<textarea className="text-input" rows={3} value={note} onChange={e=>setNote(e.target.value)} /></label><button className="ghost-button" disabled={busy} onClick={()=>perform(()=>request(`/api/${({matter:'matters',organization:'organizations',person:'people',group:'groups'} as Row)[type]}/${selected}/note`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({note,expectedVersion:detail.entity.row_version})}))}>비고 저장</button>
-          {detail.works.length>0 && <><h3>현재 업무 · DB 최신값</h3>{detail.works.map((w:Row)=><p key={w.id}>{w.work_type} / {w.service_type || '서비스 미지정'} · {w.stage} · {w.current_status}{w.user_confirmed?'':' (추정)'}</p>)}</>}
-          {detail.actions.length>0 && <><h3>본인·팀원 Action</h3>{detail.actions.map((a:Row)=><p key={a.id}>{a.assignee} · {a.title} · {a.status} {a.due_date || ''}</p>)}<a href="/matters">사건 화면에서 상태 변경</a></>}
+
+  const proposal = detail?.proposal;
+  const database = detail?.database;
+  const source = detail?.source;
+
+  return (
+    <div className="wiki-review-shell">
+      <header className="wiki-review-header">
+        <div className="wiki-review-brand">
+          <a href="/matters">상상 업무자동화</a>
+          <span>업무 Wiki 검토</span>
+        </div>
+        <div className="wiki-review-header-actions">
+          <span className="wiki-review-environment">MARKDOWN FIRST · HUMAN GATE</span>
+          <Button
+            disabled={busy}
+            onClick={() => perform(() => post('/api/wiki-markdown/scans'), 'Wiki Vault를 다시 색인했습니다.')}
+          >
+            인덱스 갱신
+          </Button>
+        </div>
+      </header>
+
+      {notice && <p className="wiki-review-notice" role="status">{notice}</p>}
+
+      <main className="wiki-review-grid">
+        <aside className="wiki-review-panel wiki-review-sidebar" aria-label="Wiki 문서 목록">
+          <div className="wiki-review-panel-heading">
+            <div>
+              <h1>문서</h1>
+              <p>{index.documents.length}개 · {index.latestScan ? formatTime(index.latestScan.completedAt ?? index.latestScan.startedAt) : '아직 색인하지 않음'}</p>
+            </div>
+            {index.latestScan?.status === 'running' && <StatusBadge status="indexing" />}
+          </div>
+
+          <label className="wiki-review-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="문서 ID·제목·경로 검색"
+              aria-label="Wiki 문서 검색"
+            />
+          </label>
+
+          <div className="wiki-review-tabs" aria-label="문서 상태 필터">
+            <Tab active={filter === 'all'} onClick={() => setFilter('all')}>전체</Tab>
+            <Tab active={filter === 'review'} onClick={() => setFilter('review')}>검토</Tab>
+            <Tab active={filter === 'issues'} onClick={() => setFilter('issues')}>오류</Tab>
+          </div>
+
+          <div className="wiki-review-document-list">
+            {filtered.map((document) => (
+              <DocumentListItem
+                key={document.docId}
+                active={document.docId === selected}
+                warning={['missing', 'duplicate_id', 'conflict', 'evidence_stale'].includes(document.status)}
+                documentTitle={document.title}
+                meta={document.relativePath}
+                status={document.status}
+                onClick={() => setSelected(document.docId)}
+              />
+            ))}
+            {!filtered.length && (
+              <p className="wiki-review-empty">
+                조건에 맞는 문서가 없습니다. Vault를 색인하거나 필터를 변경하세요.
+              </p>
+            )}
+          </div>
+        </aside>
+
+        <section className="wiki-review-panel wiki-review-main" aria-label="Wiki 문서 검토">
+          {!selected && <p className="wiki-review-empty">왼쪽에서 문서를 선택하세요.</p>}
+          {selected && !detail && <p className="wiki-review-empty">문서 상태를 불러오는 중입니다.</p>}
+          {detail && (
+            <>
+              <div className="wiki-review-title-row">
+                <div>
+                  <h2>{detail.item.title}</h2>
+                  <p>{detail.item.relativePath} · {detail.item.entityType ?? detail.item.documentType}</p>
+                </div>
+                <StatusBadge status={detail.item.status} />
+              </div>
+
+              <div className="wiki-review-source-tabs" aria-label="원본 구분">
+                <Tab active>Markdown 최신 파일</Tab>
+                <Tab active={false}>DB 현재 상태</Tab>
+              </div>
+
+              <section className="wiki-review-comparison" aria-label="Markdown과 DB 비교">
+                <article className="wiki-review-source-card is-markdown">
+                  <h3>Markdown 최신 파일</h3>
+                  <dl>
+                    <div><dt>수정</dt><dd>{formatTime(detail.item.updatedAt)}</dd></div>
+                    <div><dt>현재 hash</dt><dd>{shortHash(detail.item.currentByteHash)}</dd></div>
+                    <div><dt>색인 hash</dt><dd>{shortHash(detail.item.indexedByteHash)}</dd></div>
+                    <div><dt>경로</dt><dd>{detail.item.relativePath}</dd></div>
+                  </dl>
+                </article>
+                <article className="wiki-review-source-card">
+                  <h3>DB 현재 상태</h3>
+                  {database?.entity ? (
+                    <dl>
+                      <div><dt>식별자</dt><dd>{database.entity.our_ref ?? database.entity.name ?? database.entityId}</dd></div>
+                      <div><dt>업무</dt><dd>{database.works?.length ?? 0}건</dd></div>
+                      <div><dt>Action</dt><dd>{database.actions?.length ?? 0}건</dd></div>
+                      <div><dt>갱신</dt><dd>{formatTime(database.entity.updated_at)}</dd></div>
+                    </dl>
+                  ) : <p>연결된 업무 엔터티가 없는 지식·노트 문서입니다.</p>}
+                </article>
+              </section>
+
+              <section className={`wiki-review-state-card is-${detail.item.status}`}>
+                <div>
+                  <h3>검토 상태 · {detail.item.statusLabel}</h3>
+                  <p>
+                    검토 기준 {shortHash(proposal?.reviewedBaseByteHash)}
+                    <span aria-hidden="true"> → </span>
+                    현재 {shortHash(detail.item.currentByteHash)}
+                  </p>
+                </div>
+                <StatusBadge status={detail.item.status} />
+              </section>
+
+              <section className="wiki-review-proposal">
+                <div className="wiki-review-section-heading">
+                  <div>
+                    <h3>변경 제안</h3>
+                    <p>AI 제안은 활성 Markdown에 자동 적용되지 않습니다.</p>
+                  </div>
+                  <span className="wiki-review-proposal-status">{proposalStatusLabel(proposal?.status)}</span>
+                </div>
+                {proposal ? (
+                  <>
+                    <p className="wiki-review-change-summary">{proposal.changeSummary}</p>
+                    <dl className="wiki-review-proposal-hashes">
+                      <div><dt>기준</dt><dd>{shortHash(proposal.baseByteHash)}</dd></div>
+                      <div><dt>목표</dt><dd>{shortHash(proposal.targetByteHash)}</dd></div>
+                      <div><dt>검토자</dt><dd>{proposal.reviewer ?? '미검토'}</dd></div>
+                    </dl>
+                  </>
+                ) : (
+                  <p className="wiki-review-empty">이 문서에 생성된 제안이 없습니다.</p>
+                )}
+              </section>
+
+              <details className="wiki-review-markdown-panel">
+                <summary>Markdown 본문 보기</summary>
+                <pre>{source?.markdown ?? '유효한 Markdown 원본을 읽을 수 없습니다.'}</pre>
+              </details>
+
+              <div className="wiki-review-actions">
+                <Button
+                  disabled={busy}
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(detail.item.relativePath);
+                    setNotice('Obsidian Vault 상대 경로를 복사했습니다.');
+                  }}
+                >
+                  경로 복사
+                </Button>
+                <Button
+                  disabled={busy || detail.item.parseStatus !== 'valid'}
+                  onClick={() => perform(
+                    () => post(`/api/wiki-markdown/documents/${encodeURIComponent(detail.item.docId)}/proposals/prepare`),
+                    '제안 실행을 준비했습니다. 생성된 실행 패킷으로 Wiki 제안을 수행하세요.',
+                  )}
+                >
+                  제안 준비
+                </Button>
+                {proposal?.status === 'ready_for_review' && (
+                  <>
+                    <Button
+                      variant="danger"
+                      disabled={busy}
+                      onClick={() => perform(
+                        () => post(`/api/wiki-markdown/proposals/${encodeURIComponent(proposal.id)}/reviews`, {
+                          action: 'reject',
+                          expectedVersion: proposal.rowVersion,
+                          reviewer: '장진태',
+                        }),
+                        '제안을 반려했습니다.',
+                      )}
+                    >
+                      반려
+                    </Button>
+                    <Button
+                      variant="primary"
+                      disabled={busy}
+                      onClick={() => perform(
+                        () => post(`/api/wiki-markdown/proposals/${encodeURIComponent(proposal.id)}/reviews`, {
+                          action: 'accept_for_manual_apply',
+                          expectedVersion: proposal.rowVersion,
+                          reviewer: '장진태',
+                        }),
+                        '수동 반영 대상으로 승인했습니다. 활성 Markdown은 변경되지 않았습니다.',
+                      )}
+                    >
+                      검토 기록
+                    </Button>
+                  </>
+                )}
+                {proposal && (
+                  <Button
+                    disabled={busy}
+                    onClick={() => perform(
+                      () => post(`/api/wiki-markdown/proposals/${encodeURIComponent(proposal.id)}/reconcile`),
+                      '현재 파일·근거와 제안 상태를 다시 대조했습니다.',
+                    )}
+                  >
+                    상태 대조
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </section>
-        <section className="panel analysis-panel"><div className="panel-heading"><h2>Wiki와 개정 이력</h2><select aria-label="Wiki 버전" value={revision?.version || 0} onChange={e=>setVersion(Number(e.target.value))}>{!detail.revisions.length && <option value={0}>아직 없음</option>}{detail.revisions.map((r:Row)=><option key={r.id} value={r.version}>v{r.version} · {new Date(r.created_at).toLocaleDateString('ko-KR')}</option>)}</select></div>
-          {detail.stale && <p className="form-notice">Wiki 작성 후 기록 또는 업무 정보가 변경되었습니다. 아래 현재 기록을 우선 확인하고 새 개정을 요청하세요.</p>}
-          {detail.sourceIssues.length>0 && <p className="form-notice">메일 근거의 검증·사용자 판단이 변경되었습니다. 해당 날짜 기록을 먼저 정정해야 새 Wiki를 게시할 수 있습니다.</p>}
-          {revision ? <><p className="analysis-meta">{revision.model} / {revision.reasoning_effort} · {revision.change_summary}</p><Sections sections={revision.sections} onEvidence={id=>request(`/api/wiki/evidence/${id}`).then(setEvidence).catch(e=>setNotice(e.message))} />{previous && <details><summary>이전 버전과 비교</summary><div className="wiki-compare"><div><h3>v{previous.version}</h3><Sections sections={previous.sections} /></div><div><h3>v{revision.version}</h3><Sections sections={revision.sections} /></div></div></details>}</> : <p>게시된 Wiki가 없습니다. 날짜별 근거를 준비한 뒤 이 프로젝트에서 “Wiki 갱신”을 요청하세요.</p>}
-          {detail.drafts.filter((d:Row)=>d.review_status==='pending').map((d:Row)=><details key={d.run_id}><summary>게시 대기 개정안 · {d.change_summary}</summary><Sections sections={d.sections} onEvidence={id=>request(`/api/wiki/evidence/${id}`).then(setEvidence).catch(e=>setNotice(e.message))}/><div className="analysis-buttons"><button className="primary-button" disabled={busy} onClick={()=>perform(()=>post(`/api/wiki/drafts/${d.run_id}/review`,{action:'publish',expectedVersion:d.row_version}))}>확인 후 게시</button><button className="ghost-button" disabled={busy} onClick={()=>perform(()=>post(`/api/wiki/drafts/${d.run_id}/review`,{action:'reject',expectedVersion:d.row_version}))}>반려</button></div></details>)}
-          {detail.legacy.length>0 && <details><summary>이전 형식 Wiki 보존본</summary>{detail.legacy.map((r:Row)=><pre key={r.id}>{r.content}</pre>)}</details>}
-        </section>
-        {evidence && <section className="panel analysis-panel" aria-label="근거 상세"><div className="panel-heading"><h2>근거 기록</h2><button className="ghost-button" onClick={()=>setEvidence(null)}>닫기</button></div><p>{evidence.entry.entry_date} · {evidence.entry.provenance==='user_input'?'사용자 기록':'검증된 메일 기재 내용'}</p><p>{evidence.entry.content}</p>{evidence.mails.map((m:Row)=><div key={m.id}><h3>{m.subject}</h3><p>{m.sender_name} · {m.mail_at} · {m.direction==='sent'?'보낸 메일':'받은 메일'}</p>{m.excerpts.map((e:Row,i:number)=><blockquote key={i}>{e.quote}</blockquote>)}</div>)}</section>}
-        <section className="panel analysis-panel"><h2>날짜별 중요내용 · 현재 기록</h2>{detail.entries.map((e:Row)=><article className="analysis-field" key={e.id}><strong>{e.entry_date}</strong><span className="analysis-meta"> · {e.provenance==='user_input'?'사용자 기록':'메일 기재·독립 검증'}</span><p>{e.content}</p><div className="analysis-buttons"><button className="ghost-button" onClick={()=>request(`/api/wiki/evidence/${e.event_id}`).then(setEvidence).catch(e=>setNotice(e.message))}>근거 보기</button><button className="ghost-button" disabled={busy} onClick={()=>{setEditing(e);setContent(e.content);setEntryDate(e.entry_date);}}>정정 기록</button></div></article>)}{!detail.entries.length && <p>아직 확정된 날짜 기록이 없습니다. 검토 대기인 메일 판단은 자동 복사하지 않습니다.</p>}
-          <form onSubmit={saveEntry} className="wiki-entry-form"><h3>{editing?'이전 내용을 보존하고 정정':'날짜별 기록 추가'}</h3><label>발생일<input aria-label="기록 발생일" className="text-input" type="date" value={entryDate} onChange={e=>setEntryDate(e.target.value)} required /></label><label>내용<textarea aria-label="기록 내용" className="text-input" rows={4} value={content} onChange={e=>setContent(e.target.value)} maxLength={4000} required /></label><button className="primary-button" type="submit" disabled={busy}>기록 저장</button>{editing && <button className="ghost-button" type="button" onClick={()=>{setEditing(null);setContent('');}}>정정 취소</button>}</form>
-        </section></>}
-      </section></div></main></div>;
-}
-function Sections({sections,onEvidence}:{sections:Row[];onEvidence?:(id:string)=>void}) {
-  return <>{sections.map(s=><section key={s.key}><h3>{s.title}</h3>{s.sentences.map((line:Row,i:number)=><div key={i} className="wiki-sentence">{line.entryDate && <strong>{line.entryDate}</strong>}<p>{line.text}</p>{onEvidence && line.eventIds.map((id:string,n:number)=><button className="ghost-button" key={id} onClick={()=>onEvidence(id)}>근거 {n+1}</button>)}</div>)}</section>)}</>;
+
+        <aside className="wiki-review-panel wiki-review-evidence" aria-label="근거와 검토 이력">
+          <div className="wiki-review-panel-heading">
+            <div>
+              <h2>근거</h2>
+              <p>{proposal?.evidence?.length ?? 0}건</p>
+            </div>
+            {proposal && (
+              <StatusBadge status={proposal.status === 'stale_evidence' ? 'evidence_stale' : 'up_to_date'} />
+            )}
+          </div>
+
+          <section className="wiki-review-provenance">
+            <h3>근거 스냅샷</h3>
+            <p>{proposal ? shortHash(proposal.evidenceSnapshotHash) : '제안 생성 전'}</p>
+            <p>인덱스: {formatTime(detail?.latestScan?.completedAt ?? detail?.latestScan?.startedAt)}</p>
+          </section>
+
+          <div className="wiki-review-evidence-list">
+            {(proposal?.evidence ?? []).map((evidence: Row) => (
+              <article
+                className={`wiki-review-evidence-card ${evidence.validationStatus === 'valid' ? '' : 'is-warning'}`}
+                key={`${evidence.blockId}-${evidence.sourceKind}-${evidence.sourceId}`}
+              >
+                <div>
+                  <strong>{evidence.sourceId}</strong>
+                  <StatusBadge status={evidence.validationStatus === 'valid' ? 'up_to_date' : 'evidence_stale'} />
+                </div>
+                <p>{evidence.blockId}</p>
+                <span>{evidence.sourceKind} · {formatTime(evidence.checkedAt)}</span>
+              </article>
+            ))}
+            {!proposal?.evidence?.length && (
+              <p className="wiki-review-empty">제안이 만들어지면 문장별 근거가 여기에 표시됩니다.</p>
+            )}
+          </div>
+
+          <section className="wiki-review-human-gate">
+            <h3>Human gate</h3>
+            <p>AI는 제안과 근거 검증만 수행합니다. 최종 Markdown 반영은 사람이 Obsidian에서 수행합니다.</p>
+          </section>
+        </aside>
+      </main>
+    </div>
+  );
 }
