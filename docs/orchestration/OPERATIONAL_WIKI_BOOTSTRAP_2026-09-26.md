@@ -21,6 +21,8 @@
 
 따라서 Vault 골격은 준비됐지만 실제 운영 파일럿은 아직 실행할 수 없다. 운영 DB migration 전에 최신 일관 백업, 대시보드 중지/편집 중지 시간, 초기 1~3개 문서의 `doc_id`·entity 연결·현재 hash를 확정해야 한다.
 
+후속 업데이트: 2026-09-27에 승인된 운영 사건 3개로 1~4단계를 완료했다. 백업, migration `013`~`018`, Markdown 생성과 인덱싱 결과는 [OPERATIONAL_WIKI_PILOT_STAGE1_4_2026-09-27.md](OPERATIONAL_WIKI_PILOT_STAGE1_4_2026-09-27.md)를 따른다. 세 문서는 아직 `source_mode=legacy_db`이며 사람 검토 전 컷오버 차단은 유지한다.
+
 ## 변경하지 않은 범위
 
 - 실제 사건 문서와 고객 자료를 생성·복사하지 않았다.
