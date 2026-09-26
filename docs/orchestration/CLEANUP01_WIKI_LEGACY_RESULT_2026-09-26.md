@@ -31,7 +31,9 @@
 
 - Runner는 ready 1건과 blocked revision/draft를 포함한 계획을 별도 DB·archive에 고정한다.
 - Grader는 clean commit, DB·ready/blocked archive·결과 hash, cleanup 원장 수, 본문 비변경, 운영 DB 불변을 검사한다.
-- 최종 clean commit 결과는 구현 커밋 후 기록한다.
+- 깨끗한 후보 커밋 `fefc92dd9bbfe3c6ec5ec4395759ca5b6b26aa6e`의 최종 run `cleanup01-fefc92d-001`: **10/10 통과** (`gitDirty=false`, 운영 DB 변경 없음).
+- Runner 산출물: `상상업무자동화_EvalRunner/runs/cleanup01-fefc92d-001`.
+- Grader 보고서: `상상업무자동화_EvalGrader/reports/cleanup01-fefc92d-001.json`.
 
 ## 실제 정리 전 남은 조건
 
