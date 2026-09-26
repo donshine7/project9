@@ -220,6 +220,8 @@ MVP에서는 AI가 `80_Proposals`에 제안을 쓰고 사람이 Obsidian에서 �
 
 단계 3 결과는 [STAGE3_WIKI_EVAL_RESULT_2026-09-22.md](STAGE3_WIKI_EVAL_RESULT_2026-09-22.md), 단계 4 결과는 [STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md](STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md), 단계 5 결과는 [STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md](STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md), 단계 6 합성 gate 결과는 [STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md](STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md), 단계 7 합성 확대 결과는 [STAGE7_WIKI_SCALE_RESULT_2026-09-26.md](STAGE7_WIKI_SCALE_RESULT_2026-09-26.md)에 기록했다. 운영 Vault와 필수 schema 및 검토 완료 후보가 아직 없으므로 실제 전환·확대는 실행하지 않는다.
 
+후속으로 [운영 업무 Wiki Vault 초기화](OPERATIONAL_WIKI_BOOTSTRAP_2026-09-26.md)를 완료해 Vault 부재는 해소했다. 운영 DB 필수 schema, 초기 문서와 검토 완료 후보는 아직 없으므로 실제 전환·확대 차단은 유지한다.
+
 기존 업무 개선은 다음 묶음으로 병행 관리한다.
 
 - EasyPAT: 보류된 진단 스크립트 4개 정리·모의 검사, 업로드 readback/교차검증은 실제 실행 범위를 따로 확정.
