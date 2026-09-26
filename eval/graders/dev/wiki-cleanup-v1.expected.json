@@ -1,0 +1,9 @@
+{
+  "schema": "wiki-cleanup-eval-expected-v1",
+  "counts": {
+    "revisions": 2,
+    "drafts": 1,
+    "runs": 2,
+    "items": 4
+  }
+}

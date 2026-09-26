@@ -118,6 +118,21 @@ npm run eval:wiki:auto-apply:grader -- `
 
 통과 기준은 별도 자동 승인, 사람 경쟁 편집 보존과 conflict 기록, 파일 적용 후 중단의 재색인 복구, `ai_applied` revision과 자동 적용 event, 운영 DB hash 불변이다.
 
+## EVAL-06 레거시 정리 준비
+
+```powershell
+npm run eval:wiki:cleanup:runner -- `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\cleanup01-<commit>-001' `
+  --run-id 'cleanup01-<commit>-001'
+
+npm run eval:wiki:cleanup:grader -- `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\cleanup01-<commit>-001' `
+  --expected 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\graders\dev\wiki-cleanup-v1.expected.json' `
+  --report 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\reports\cleanup01-<commit>-001.json'
+```
+
+통과 기준은 ready/blocked 계획의 정확한 분리, revision/draft archive hash, legacy 본문 비변경, 운영 실행 차단과 운영 DB hash 불변이다.
+
 ## 개발 fixture와 holdout
 
 - `wiki-dev-v1`과 `eval/graders/dev`는 도구 회귀를 위한 공개 fixture다. 모델 품질을 증명하는 비공개 holdout이 아니다.
