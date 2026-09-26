@@ -215,7 +215,7 @@ MVP에서는 AI가 `80_Proposals`에 제안을 쓰고 사람이 Obsidian에서 �
 | 6 합성 게이트 완료 | CUTOVER-01 | 허용된 소수 문서부터 원본 전환 | 합성 4문서에서 DB 본문 쓰기 차단·조용한 fallback 없음 검증, 운영 대상 미전환 |
 | 6 합성 게이트 완료 | RECOVERY-01 | DB+Vault 일관 백업·사본 복원 리허설 | 합성 4문서의 본문·review·event 연결과 hash 사본 복원 확인, 운영 리허설 미실행 |
 | 7 합성 확대 게이트 완료 | SCALE-01 | 운영 범위 확대·기존 기능 통합 | 합성 40문서의 증분 처리·처리량·검토부담 계측 완료, 운영 Vault·스키마·후보 부재로 실제 확대 미실행 |
-| 후속 | EDIT-01 | 검토된 AI 변경 자동 반영 | 사람/AI 쓰기 조정과 crash/경쟁 테스트 통과 |
+| 후속 합성 게이트 완료 | EDIT-01 | 검토된 AI 변경 자동 반영 | 별도 자동 승인·crash 복구·경쟁 편집 보존 합성 검증 완료, 운영 편집 조정 미승인으로 운영 차단 유지 |
 | 후속 | CLEANUP-01 | 레거시 본문 저장 축소 | 소비자 전환·이관·복구 확인 후 승인된 보존 정책 적용 |
 
 단계 3 결과는 [STAGE3_WIKI_EVAL_RESULT_2026-09-22.md](STAGE3_WIKI_EVAL_RESULT_2026-09-22.md), 단계 4 결과는 [STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md](STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md), 단계 5 결과는 [STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md](STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md), 단계 6 합성 gate 결과는 [STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md](STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md), 단계 7 합성 확대 결과는 [STAGE7_WIKI_SCALE_RESULT_2026-09-26.md](STAGE7_WIKI_SCALE_RESULT_2026-09-26.md)에 기록했다. 운영 Vault와 필수 schema 및 검토 완료 후보가 아직 없으므로 실제 전환·확대는 실행하지 않는다.

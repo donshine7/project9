@@ -16,6 +16,8 @@
 .wiki-stage6-test/
 .wiki-stage7-test/
 .wiki-eval-scale/
+.wiki-edit01-test/
+.wiki-eval-auto-apply/
 .wiki-eval-cutover/
 .smoke-runtime/
 .smoke-runtime-stage6/

@@ -103,3 +103,5 @@
 단계 6의 원본 전환 도구, legacy 쓰기 차단, DB+Vault 사본 복원과 합성 EVAL-03 결과는 [STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md](STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md)에 기록한다. 운영 전환은 실제 대상 1~3개 문서와 편집 중지 시간, 최신 백업을 사람이 별도로 승인한 뒤 진행한다.
 
 단계 7의 내용 hash 기반 증분 처리, 처리량·검토부담 계측과 합성 EVAL-04 결과는 [STAGE7_WIKI_SCALE_RESULT_2026-09-26.md](STAGE7_WIKI_SCALE_RESULT_2026-09-26.md)에 기록한다. 읽기 전용 운영 조사에서 업무 Vault와 필수 schema 및 검토 완료 후보가 없음을 확인했으므로 운영 파일럿은 차단 상태를 유지한다.
+
+후속 EDIT-01의 별도 자동 승인, 경쟁 편집 차단, 파일 적용 후 중단 복구와 합성 EVAL-05 결과는 [EDIT01_WIKI_AUTO_APPLY_RESULT_2026-09-26.md](EDIT01_WIKI_AUTO_APPLY_RESULT_2026-09-26.md)에 기록한다. 운영 자동 반영은 실제 Vault와 편집 조정 승인이 있을 때까지 차단한다.

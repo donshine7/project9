@@ -73,6 +73,12 @@ npm run wiki:migrate:dry-run -- --output-root '<SSPAT_ISOLATED_ROOT>\migration-r
 
 `npm run wiki:scale -- operational-readiness`는 운영 DB를 read-only로 열어 schema와 집계만 출력합니다. 본문을 출력하거나 migration을 적용하지 않으며 운영 준비 승인을 만들지 않습니다. 별도 EVAL-04 실행 방법은 `../eval/README.md`를 따릅니다.
 
+### 검토된 AI 제안 자동 반영
+
+자동 반영은 수동 반영 검토와 별개 승인을 요구합니다. 격리 프로필에서 `npm run wiki:auto-apply -- approve PROPOSAL_ID ROW_VERSION`, `apply PROPOSAL_ID APPLY`, `recover OPERATION_ID`, `status OPERATION_ID` 순서로 사용합니다. base/target/evidence hash가 승인과 다르거나 사람이 동시에 저장하면 충돌로 중단합니다.
+
+운영 프로필은 실제 Obsidian 편집 조정 승인 전까지 차단됩니다. 합성 경쟁·중단 복구 검사는 `npm run test:wiki-edit01`, 독립 평가는 `../eval/README.md`의 EVAL-05를 사용합니다.
+
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.
 # 3단계 분석·검토
 

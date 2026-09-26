@@ -1,0 +1,11 @@
+{
+  "schema": "wiki-auto-apply-eval-expected-v1",
+  "conflictCode": "WIKI_AUTO_APPLY_BASE_CONFLICT",
+  "faultCode": "WIKI_AUTO_APPLY_TEST_FAULT",
+  "counts": {
+    "approvals": 2,
+    "conflicts": 1,
+    "succeeded": 1,
+    "aiRevisions": 1
+  }
+}
