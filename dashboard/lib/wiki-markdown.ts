@@ -59,6 +59,23 @@ type Candidate = {
   gitCommit: string | null;
   gitBlob: string | null;
   gitStatus: 'committed' | 'uncommitted' | 'unavailable';
+  contentReused: boolean;
+};
+
+type CachedDocument = {
+  doc_id: string;
+  document_type: WikiFrontmatter['document_type'];
+  entity_type: WikiFrontmatter['entity_type'];
+  entity_id: string | null;
+  title: string;
+  relative_path: string;
+  byte_hash: string;
+  text_hash: string;
+  parse_status: string;
+  history_object_path: string | null;
+  git_commit: string | null;
+  git_blob: string | null;
+  git_status: Candidate['gitStatus'] | null;
 };
 
 function sha256(value: string | Buffer) {
@@ -206,7 +223,7 @@ async function gitMetadata(vaultRoot: string, absolutePath: string, relativePath
   }
 }
 
-async function collectMarkdown(vaultRoot: string) {
+async function collectMarkdown(vaultRoot: string, cachedByPath: Map<string, CachedDocument>, forceFull: boolean) {
   const issues: ScanIssue[] = [];
   const candidates: Candidate[] = [];
   const rootStat = await lstat(vaultRoot);
@@ -238,8 +255,32 @@ async function collectMarkdown(vaultRoot: string) {
       }
       const bytes = await readFile(resolvedFile);
       try {
-        const parsed = parseWikiMarkdown(bytes);
         const byteHash = sha256(bytes);
+        const cached = cachedByPath.get(relativePath);
+        if (!forceFull && cached?.parse_status === 'valid' && cached.byte_hash === byteHash && cached.history_object_path) {
+          candidates.push({
+            relativePath,
+            byteHash,
+            textHash: cached.text_hash,
+            fileSize: bytes.length,
+            mtimeMs: Math.trunc(metadata.mtimeMs),
+            frontmatter: {
+              schema_version: 'wiki-md-v1',
+              doc_id: cached.doc_id,
+              document_type: cached.document_type,
+              entity_type: cached.entity_type ?? null,
+              entity_id: cached.entity_id ?? null,
+              title: cached.title,
+            },
+            historyObjectPath: cached.history_object_path,
+            gitCommit: cached.git_commit,
+            gitBlob: cached.git_blob,
+            gitStatus: cached.git_status ?? 'unavailable',
+            contentReused: true,
+          });
+          continue;
+        }
+        const parsed = parseWikiMarkdown(bytes);
         const historyObjectPath = await writeHistoryObject(vaultRoot, byteHash, bytes);
         const git = await gitMetadata(vaultRoot, resolvedFile, relativePath);
         candidates.push({
@@ -251,6 +292,7 @@ async function collectMarkdown(vaultRoot: string) {
           frontmatter: parsed.frontmatter,
           historyObjectPath,
           ...git,
+          contentReused: false,
         });
       } catch (error) {
         issues.push({ severity: 'error', code: 'FRONTMATTER_INVALID', relativePath, docId: null, detail: error instanceof Error ? error.message : 'Markdown 파싱 실패' });
@@ -282,7 +324,7 @@ function insertIssue(db: DatabaseSync, scanId: string, issue: ScanIssue, timesta
     .run(randomUUID(), scanId, issue.severity, issue.code, issue.relativePath, issue.docId, issue.detail.slice(0, 2000), timestamp);
 }
 
-export async function scanWikiMarkdownVault() {
+export async function scanWikiMarkdownVault(options: { forceFull?: boolean } = {}) {
   const vaultRoot = resolveWikiVaultPath();
   try {
     await access(vaultRoot, fsConstants.R_OK | fsConstants.W_OK);
@@ -290,8 +332,15 @@ export async function scanWikiMarkdownVault() {
     throw new WorkDbError('Wiki Vault를 읽고 이력을 기록할 수 없습니다.', 409, 'WIKI_VAULT_UNAVAILABLE');
   }
   const startedAt = new Date().toISOString();
+  const startedMs = Date.now();
   const scanId = randomUUID();
-  const { candidates, issues } = await collectMarkdown(vaultRoot);
+  const cachedByPath = withDatabase((db) => new Map((db.prepare(`
+    SELECT d.doc_id,d.document_type,d.entity_type,d.entity_id,d.title,d.relative_path,d.byte_hash,d.text_hash,d.parse_status,
+           r.history_object_path,r.git_commit,r.git_blob,r.git_status
+    FROM wiki_document d LEFT JOIN wiki_markdown_revision r ON r.id=d.current_revision_id
+  `).all() as CachedDocument[]).map((item) => [item.relative_path, item])));
+  const forceFull = options.forceFull === true;
+  const { candidates, issues } = await collectMarkdown(vaultRoot, cachedByPath, forceFull);
   const duplicates = new Map<string, Candidate[]>();
   for (const candidate of candidates) {
     const list = duplicates.get(candidate.frontmatter.doc_id) ?? [];
@@ -306,9 +355,11 @@ export async function scanWikiMarkdownVault() {
   return withDatabase((db) => transaction(db, () => {
     const timestamp = new Date().toISOString();
     const vaultFingerprint = sha256(path.resolve(vaultRoot).toLowerCase());
-    db.prepare(`INSERT INTO wiki_markdown_scan(id,profile,vault_fingerprint,status,started_at) VALUES (?,?,?,'running',?)`)
-      .run(scanId, runtimeProfile(), vaultFingerprint, startedAt);
+    db.prepare(`INSERT INTO wiki_markdown_scan(id,profile,vault_fingerprint,status,processing_mode,started_at) VALUES (?,?,?,'running',?,?)`)
+      .run(scanId, runtimeProfile(), vaultFingerprint, forceFull ? 'full_parse' : 'content_incremental', startedAt);
     let indexedCount = 0;
+    let changedCount = 0;
+    let unchangedCount = 0;
 
     for (const candidate of candidates) {
       const docId = candidate.frontmatter.doc_id;
@@ -344,11 +395,13 @@ export async function scanWikiMarkdownVault() {
           .run(docId, candidate.frontmatter.document_type, candidate.frontmatter.entity_type ?? null, candidate.frontmatter.entity_id ?? null, candidate.frontmatter.title, candidate.relativePath, candidate.byteHash, candidate.textHash, candidate.fileSize, candidate.mtimeMs, scanId, timestamp, timestamp);
       }
       if (changed) {
+        changedCount += 1;
         const revision = db.prepare('SELECT COALESCE(MAX(revision_number),0)+1 AS version FROM wiki_markdown_revision WHERE doc_id=?').get(docId) as { version: number };
         currentRevisionId = randomUUID();
         db.prepare(`INSERT INTO wiki_markdown_revision(id,doc_id,revision_number,parent_revision_id,scan_id,relative_path,byte_hash,text_hash,file_size,history_object_path,git_commit,git_blob,git_status,origin,observed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'human_observed',?)`)
           .run(currentRevisionId, docId, Number(revision.version), existing?.current_revision_id ?? null, scanId, candidate.relativePath, candidate.byteHash, candidate.textHash, candidate.fileSize, candidate.historyObjectPath, candidate.gitCommit, candidate.gitBlob, candidate.gitStatus, timestamp);
       }
+      else unchangedCount += 1;
       db.prepare(`UPDATE wiki_document SET title=?,relative_path=?,byte_hash=?,text_hash=?,file_size=?,file_mtime_ms=?,parse_status='valid',current_revision_id=?,last_seen_scan_id=?,updated_at=? WHERE doc_id=?`)
         .run(candidate.frontmatter.title, candidate.relativePath, candidate.byteHash, candidate.textHash, candidate.fileSize, candidate.mtimeMs, currentRevisionId, scanId, timestamp, docId);
       indexedCount += 1;
@@ -357,16 +410,17 @@ export async function scanWikiMarkdownVault() {
     db.prepare(`UPDATE wiki_document SET parse_status='missing',updated_at=? WHERE last_seen_scan_id<>? OR last_seen_scan_id IS NULL`).run(timestamp, scanId);
     for (const issue of issues) insertIssue(db, scanId, issue, timestamp);
     const snapshotHash = sha256(JSON.stringify(candidates.map((candidate) => [candidate.relativePath, candidate.frontmatter.doc_id, candidate.byteHash]).sort((left, right) => left[0].localeCompare(right[0]))));
-    db.prepare(`UPDATE wiki_markdown_scan SET status='succeeded',discovered_count=?,indexed_count=?,issue_count=?,snapshot_hash=?,completed_at=? WHERE id=?`)
-      .run(candidates.length, indexedCount, issues.length, snapshotHash, timestamp, scanId);
-    return { scanId, status: 'succeeded', discoveredCount: candidates.length, indexedCount, issueCount: issues.length, snapshotHash };
+    const elapsedMs = Math.max(0, Date.now() - startedMs);
+    db.prepare(`UPDATE wiki_markdown_scan SET status='succeeded',discovered_count=?,indexed_count=?,issue_count=?,changed_count=?,unchanged_count=?,elapsed_ms=?,snapshot_hash=?,completed_at=? WHERE id=?`)
+      .run(candidates.length, indexedCount, issues.length, changedCount, unchangedCount, elapsedMs, snapshotHash, timestamp, scanId);
+    return { scanId, status: 'succeeded', processingMode: forceFull ? 'full_parse' : 'content_incremental', discoveredCount: candidates.length, indexedCount, issueCount: issues.length, changedCount, unchangedCount, elapsedMs, snapshotHash };
   }));
 }
 
 export function wikiMarkdownIndex() {
   return withDatabase((db) => ({
     documents: db.prepare(`SELECT doc_id AS docId,document_type AS documentType,entity_type AS entityType,entity_id AS entityId,title,relative_path AS relativePath,byte_hash AS byteHash,text_hash AS textHash,file_size AS fileSize,file_mtime_ms AS fileMtimeMs,parse_status AS parseStatus,current_revision_id AS currentRevisionId,updated_at AS updatedAt FROM wiki_document ORDER BY title,doc_id`).all(),
-    latestScan: db.prepare(`SELECT id AS scanId,profile,status,discovered_count AS discoveredCount,indexed_count AS indexedCount,issue_count AS issueCount,snapshot_hash AS snapshotHash,started_at AS startedAt,completed_at AS completedAt FROM wiki_markdown_scan ORDER BY started_at DESC LIMIT 1`).get() ?? null,
+    latestScan: db.prepare(`SELECT id AS scanId,profile,status,processing_mode AS processingMode,discovered_count AS discoveredCount,indexed_count AS indexedCount,issue_count AS issueCount,changed_count AS changedCount,unchanged_count AS unchangedCount,elapsed_ms AS elapsedMs,snapshot_hash AS snapshotHash,started_at AS startedAt,completed_at AS completedAt FROM wiki_markdown_scan ORDER BY started_at DESC LIMIT 1`).get() ?? null,
   }));
 }
 

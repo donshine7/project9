@@ -86,6 +86,23 @@ npm run eval:wiki:cutover:grader -- `
 
 통과 기준은 전환 대상 4개 모두 Markdown 원본 모드, legacy revision 보존, legacy 본문 쓰기 차단, 승인·event·hash 연결 유지, 복원 사본 DB/Vault hash 일치, 운영 경로 미변경이다.
 
+## EVAL-04 증분 확대
+
+합성 Markdown 40개를 전체 처리한 뒤 무변경 재검색, 5개 변경 재검색, 준비도 평가를 수행한다. Runner는 운영 DB의 전후 hash도 비교하지만 운영 본문을 읽거나 수정하지 않는다.
+
+```powershell
+npm run eval:wiki:scale:runner -- `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\stage7-<commit>-001' `
+  --run-id 'stage7-<commit>-001'
+
+npm run eval:wiki:scale:grader -- `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\stage7-<commit>-001' `
+  --expected 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\graders\dev\wiki-scale-v1.expected.json' `
+  --report 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\reports\stage7-<commit>-001.json'
+```
+
+통과 기준은 최초 40개 변경, 무변경 40개 재사용, 5개 변경·35개 재사용, 최종 revision 45개, scale gate 통과, 운영 DB hash 불변이다.
+
 ## 개발 fixture와 holdout
 
 - `wiki-dev-v1`과 `eval/graders/dev`는 도구 회귀를 위한 공개 fixture다. 모델 품질을 증명하는 비공개 holdout이 아니다.

@@ -67,6 +67,12 @@ npm run wiki:migrate:dry-run -- --output-root '<SSPAT_ISOLATED_ROOT>\migration-r
 
 `npm run wiki:cutover -- rehearse CUTOVER_RUN_ID RESTORE_ROOT`는 기존 경로를 덮어쓰지 않는 새 사본 폴더에서 DB quick check와 문서·revision·proposal review·source-mode event·파일 hash를 대조합니다. 운영 프로필 전환은 실제 대상 목록의 별도 승인 전까지 코드에서 차단됩니다. 합성 회귀는 `npm run test:wiki-stage6`, 독립 평가 명령은 `../eval/README.md`를 사용합니다.
 
+### Wiki 증분 처리와 확대 준비도
+
+`npm run wiki:scale -- assess`는 격리 프로필에서 전체 문서 목록을 확인하되 byte hash가 같은 파일의 파싱·Git 조회·revision 생성을 생략하고 처리량·검토부담 blocker를 `wiki_scale_run`에 기록합니다. `npm run test:wiki-stage7`은 40개 문서 중 5개만 바뀐 경우 5개 revision만 추가되는지 검사합니다.
+
+`npm run wiki:scale -- operational-readiness`는 운영 DB를 read-only로 열어 schema와 집계만 출력합니다. 본문을 출력하거나 migration을 적용하지 않으며 운영 준비 승인을 만들지 않습니다. 별도 EVAL-04 실행 방법은 `../eval/README.md`를 따릅니다.
+
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.
 # 3단계 분석·검토
 

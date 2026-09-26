@@ -1,6 +1,6 @@
 # 협업 전환 계획 — 2026-09-22
 
-상태: v4로 개정. 단계 6 CUTOVER-01·RECOVERY-01의 합성 gate 완료, 운영 Wiki 본문 원본 전환은 아직 수행하지 않았다.
+상태: v5로 개정. 단계 7 SCALE-01의 합성 확대 gate 완료, 운영 Vault·전환 schema·검토 후보가 없어 운영 Wiki 본문 원본 전환은 아직 수행하지 않았다.
 
 전체 작업의 현재 기준은 [Wiki Markdown 원본 전체 기획](WIKI_MARKDOWN_MASTER_PLAN_2026-09-22.md)과 [이관·복구·평가 계약](WIKI_MARKDOWN_MIGRATION_AND_EVAL_2026-09-22.md)이다. 사용자 요청에 따라 기존 단방향 export 목표를 대체한다. 아래는 개정 계획의 요약이다.
 
@@ -101,3 +101,5 @@
 단계 5의 Figma 기반 Wiki 검토 화면과 합성 수직 흐름 39/39 결과는 [STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md](STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md)에 기록한다. 다음 단계는 허용된 소수 문서를 대상으로 하는 CUTOVER-01과 DB+Vault 사본 복원 RECOVERY-01이다.
 
 단계 6의 원본 전환 도구, legacy 쓰기 차단, DB+Vault 사본 복원과 합성 EVAL-03 결과는 [STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md](STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md)에 기록한다. 운영 전환은 실제 대상 1~3개 문서와 편집 중지 시간, 최신 백업을 사람이 별도로 승인한 뒤 진행한다.
+
+단계 7의 내용 hash 기반 증분 처리, 처리량·검토부담 계측과 합성 EVAL-04 결과는 [STAGE7_WIKI_SCALE_RESULT_2026-09-26.md](STAGE7_WIKI_SCALE_RESULT_2026-09-26.md)에 기록한다. 읽기 전용 운영 조사에서 업무 Vault와 필수 schema 및 검토 완료 후보가 없음을 확인했으므로 운영 파일럿은 차단 상태를 유지한다.
