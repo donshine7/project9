@@ -41,7 +41,10 @@
 
 - Runner는 별도 실행 루트에서 40문서 전체 → 무변경 → 5문서 변경 → 준비도 평가를 수행한다.
 - Grader는 후보 clean 상태, DB/Vault/결과 hash, 스캔별 changed/unchanged 수, revision 45개, 운영 DB hash 불변을 독립 확인한다.
-- 최종 clean commit 평가 결과는 구현 커밋 후 이 문서에 기록한다.
+- 깨끗한 후보 커밋 `0d8e95f5b66c9f25ce50f0c2335ca721e82e6ba9`의 최종 run `stage7-0d8e95f-001`: **15/15 통과** (`gitDirty=false`, 운영 DB 변경 없음).
+- 무변경 재검색은 40개 기준 51ms, 5개 변경 재검색은 830ms, 최종 무변경 평가는 42ms였다. 이 수치는 합성 로컬 실행 기준이며 운영 SLA가 아니다.
+- Runner 산출물: `상상업무자동화_EvalRunner/runs/stage7-0d8e95f-001`.
+- Grader 보고서: `상상업무자동화_EvalGrader/reports/stage7-0d8e95f-001.json`.
 
 ## 남은 범위
 
