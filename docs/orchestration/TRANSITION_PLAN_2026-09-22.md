@@ -105,3 +105,5 @@
 단계 7의 내용 hash 기반 증분 처리, 처리량·검토부담 계측과 합성 EVAL-04 결과는 [STAGE7_WIKI_SCALE_RESULT_2026-09-26.md](STAGE7_WIKI_SCALE_RESULT_2026-09-26.md)에 기록한다. 읽기 전용 운영 조사에서 업무 Vault와 필수 schema 및 검토 완료 후보가 없음을 확인했으므로 운영 파일럿은 차단 상태를 유지한다.
 
 후속 EDIT-01의 별도 자동 승인, 경쟁 편집 차단, 파일 적용 후 중단 복구와 합성 EVAL-05 결과는 [EDIT01_WIKI_AUTO_APPLY_RESULT_2026-09-26.md](EDIT01_WIKI_AUTO_APPLY_RESULT_2026-09-26.md)에 기록한다. 운영 자동 반영은 실제 Vault와 편집 조정 승인이 있을 때까지 차단한다.
+
+후속 CLEANUP-01의 불변 legacy archive, cutover/recovery 적격성, draft/미전환 blocker와 합성 EVAL-06 결과는 [CLEANUP01_WIKI_LEGACY_RESULT_2026-09-26.md](CLEANUP01_WIKI_LEGACY_RESULT_2026-09-26.md)에 기록한다. 운영 이관과 보존정책 승인 전에는 실제 본문 redaction이나 table 삭제를 수행하지 않는다.

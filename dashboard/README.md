@@ -79,6 +79,12 @@ npm run wiki:migrate:dry-run -- --output-root '<SSPAT_ISOLATED_ROOT>\migration-r
 
 운영 프로필은 실제 Obsidian 편집 조정 승인 전까지 차단됩니다. 합성 경쟁·중단 복구 검사는 `npm run test:wiki-edit01`, 독립 평가는 `../eval/README.md`의 EVAL-05를 사용합니다.
 
+### 레거시 Wiki 본문 정리 준비
+
+`npm run wiki:cleanup -- dry-run OUTPUT_ROOT`는 격리 DB의 legacy revision/draft 본문을 불변 archive로 먼저 보존하고, 문서별 Markdown 전환·cutover·recovery 증거를 대조해 적격/차단 목록을 만듭니다. 이 명령은 DB 본문을 삭제하거나 수정하지 않습니다.
+
+운영 실행과 실제 redaction은 보존정책 및 모든 소비자 전환 승인 전까지 제공하지 않습니다. 합성 검사는 `npm run test:wiki-cleanup01`, 독립 평가는 `../eval/README.md`의 EVAL-06을 사용합니다.
+
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.
 # 3단계 분석·검토
 
