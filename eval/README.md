@@ -103,6 +103,21 @@ npm run eval:wiki:scale:grader -- `
 
 통과 기준은 최초 40개 변경, 무변경 40개 재사용, 5개 변경·35개 재사용, 최종 revision 45개, scale gate 통과, 운영 DB hash 불변이다.
 
+## EVAL-05 자동 반영 충돌·복구
+
+```powershell
+npm run eval:wiki:auto-apply:runner -- `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\edit01-<commit>-001' `
+  --run-id 'edit01-<commit>-001'
+
+npm run eval:wiki:auto-apply:grader -- `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\edit01-<commit>-001' `
+  --expected 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\graders\dev\wiki-auto-apply-v1.expected.json' `
+  --report 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\reports\edit01-<commit>-001.json'
+```
+
+통과 기준은 별도 자동 승인, 사람 경쟁 편집 보존과 conflict 기록, 파일 적용 후 중단의 재색인 복구, `ai_applied` revision과 자동 적용 event, 운영 DB hash 불변이다.
+
 ## 개발 fixture와 holdout
 
 - `wiki-dev-v1`과 `eval/graders/dev`는 도구 회귀를 위한 공개 fixture다. 모델 품질을 증명하는 비공개 holdout이 아니다.
