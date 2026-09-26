@@ -34,7 +34,9 @@
 - 별도 Grader는 DB/Vault/bundle/report hash, 4개 문서의 원본 모드·승인·event·legacy 보존·파일 hash와 복원 사본을 채점한다.
 - 최신 사전 run `stage6-precommit-002`: 안전성 보강 후 **43/43 통과**.
 - 사전 Grader 보고서: `상상업무자동화_EvalGrader/reports/stage6-precommit-002.json`.
-- 깨끗한 후보 커밋 기준 최종 run은 구현 커밋 후 새 run ID로 다시 실행한다.
+- 깨끗한 후보 커밋 `5d4c12d7f84295d201b874844cbf9a745629c24e` 기준 최종 run `stage6-5d4c12d-001`: **43/43 통과** (`gitDirty=false`, 대상 4개, 차단된 legacy 쓰기 4건, 복원 검증 4개, 운영 변경 0건).
+- 최종 Runner 산출물: `상상업무자동화_EvalRunner/runs/stage6-5d4c12d-001`.
+- 최종 Grader 보고서: `상상업무자동화_EvalGrader/reports/stage6-5d4c12d-001.json`.
 
 ## 자동 검증
 
