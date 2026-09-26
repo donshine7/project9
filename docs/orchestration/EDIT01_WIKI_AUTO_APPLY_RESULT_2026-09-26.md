@@ -33,6 +33,8 @@
 - Runner는 사람 경쟁 편집을 주입해 충돌 차단과 사람 본문 보존을 확인한다.
 - 별도 제안은 파일 적용 직후 중단을 주입하고 operation 원장에서 복구한다.
 - Grader는 clean commit, DB/Vault/결과 hash, 승인 2건, 충돌 1건, 성공 1건, `ai_applied` revision 1건, 운영 DB 불변을 검사한다.
-- 최종 clean commit 결과는 구현 커밋 후 기록한다.
+- 깨끗한 후보 커밋 `f03c02323cd4e673a81dd9a068522eb8ae07ba98`의 최종 run `edit01-f03c023-001`: **10/10 통과** (`gitDirty=false`, 운영 DB 변경 없음).
+- Runner 산출물: `상상업무자동화_EvalRunner/runs/edit01-f03c023-001`.
+- Grader 보고서: `상상업무자동화_EvalGrader/reports/edit01-f03c023-001.json`.
 
 따라서 자동 반영의 결정적 복구 구조는 준비됐지만 실제 업무 Vault가 없고 운영 편집 조정도 승인되지 않았으므로 운영 자동 반영은 아직 켜지 않는다.
