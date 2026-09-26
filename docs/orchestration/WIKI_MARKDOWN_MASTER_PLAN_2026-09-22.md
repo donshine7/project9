@@ -212,13 +212,13 @@ MVP에서는 AI가 `80_Proposals`에 제안을 쓰고 사람이 Obsidian에서 �
 | 4 완료 | MIG-01 | DB Wiki→Markdown 일회성 변환·dry-run | 게시 이력/초안 분리, 원본·출력 hash 대조, 동일 출력 재실행 멱등성 |
 | 5 완료 | UX-01 | Figma 승인 → 대시보드 Markdown 보기/검토 | 원본·최신본·검토본·DB 상태·충돌 의미 일치 |
 | 5 완료 | EVAL-02 | 작은 수직 기능 통합 평가 | 합성 대상 4개에 편집→인덱스→제안→검토→수동 반영 완주, 39/39 통과 |
-| 6 | CUTOVER-01 | 허용된 소수 문서부터 원본 전환 | 전환 문서의 DB 본문 쓰기 중단, 조용한 fallback 없음 |
-| 6 | RECOVERY-01 | DB+Vault 일관 백업·사본 복원 리허설 | 문서 본문·review·event 연결과 hash 복원 확인 |
+| 6 합성 게이트 완료 | CUTOVER-01 | 허용된 소수 문서부터 원본 전환 | 합성 4문서에서 DB 본문 쓰기 차단·조용한 fallback 없음 검증, 운영 대상 미전환 |
+| 6 합성 게이트 완료 | RECOVERY-01 | DB+Vault 일관 백업·사본 복원 리허설 | 합성 4문서의 본문·review·event 연결과 hash 사본 복원 확인, 운영 리허설 미실행 |
 | 7 | SCALE-01 | 운영 범위 확대·기존 기능 통합 | 증분 갱신·처리량·비용·검토 부담 목표 충족 |
 | 후속 | EDIT-01 | 검토된 AI 변경 자동 반영 | 사람/AI 쓰기 조정과 crash/경쟁 테스트 통과 |
 | 후속 | CLEANUP-01 | 레거시 본문 저장 축소 | 소비자 전환·이관·복구 확인 후 승인된 보존 정책 적용 |
 
-단계 3 결과는 [STAGE3_WIKI_EVAL_RESULT_2026-09-22.md](STAGE3_WIKI_EVAL_RESULT_2026-09-22.md), 단계 4 결과는 [STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md](STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md), 단계 5 결과는 [STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md](STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md)에 기록했다. 다음은 CUTOVER-01과 RECOVERY-01이며, 실제 문서는 허용된 소수 대상과 복원 리허설을 통과한 뒤에만 원본을 전환한다.
+단계 3 결과는 [STAGE3_WIKI_EVAL_RESULT_2026-09-22.md](STAGE3_WIKI_EVAL_RESULT_2026-09-22.md), 단계 4 결과는 [STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md](STAGE4_WIKI_PROPOSAL_MIGRATION_RESULT_2026-09-22.md), 단계 5 결과는 [STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md](STAGE5_WIKI_UX_EVAL_RESULT_2026-09-25.md), 단계 6 합성 gate 결과는 [STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md](STAGE6_WIKI_CUTOVER_RECOVERY_RESULT_2026-09-26.md)에 기록했다. 다음은 사용자가 허용한 실제 1~3개 문서의 대상 확정과 운영 사본 복원 리허설이며, 그 전에는 운영 원본을 전환하지 않는다.
 
 기존 업무 개선은 다음 묶음으로 병행 관리한다.
 
