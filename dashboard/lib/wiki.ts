@@ -17,6 +17,34 @@ const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(valu
 function check(value: unknown, message: string, status = 400): asserts value { if (!value) throw new WorkDbError(message, status, 'WIKI_VALIDATION'); }
 function text(value: unknown, max = 4000): asserts value is string { check(typeof value === 'string' && value.trim() && value.length <= max, '내용이 비어 있거나 너무 깁니다.'); }
 function get(db: DatabaseSync, sql: string, ...params: string[]) { return db.prepare(sql).get(...params) as Row | undefined; }
+function sourceMode(db: DatabaseSync, type: string, id: string) {
+  const rows = db.prepare(`
+    SELECT
+      s.source_mode AS sourceMode,
+      s.doc_id AS docId,
+      s.changed_at AS changedAt,
+      s.changed_by_event_id AS changedByEventId,
+      d.relative_path AS relativePath,
+      d.byte_hash AS byteHash,
+      d.parse_status AS parseStatus,
+      d.current_revision_id AS currentRevisionId,
+      r.revision_number AS revisionNumber
+    FROM wiki_document_source_mode s
+    JOIN wiki_document d ON d.doc_id=s.doc_id
+    LEFT JOIN wiki_markdown_revision r ON r.id=d.current_revision_id
+    WHERE s.legacy_entity_type=? AND s.legacy_entity_id=?
+    ORDER BY s.changed_at DESC,s.doc_id
+  `).all(type, id) as Row[];
+  const markdown = rows.filter((row) => row.sourceMode === 'markdown');
+  if (markdown.length > 1) throw new WorkDbError('동일 엔티티에 Markdown 원본 문서가 둘 이상 연결되었습니다.', 409, 'WIKI_SOURCE_MODE_CONFLICT');
+  return markdown[0] ?? rows[0] ?? null;
+}
+function assertLegacyWikiWrite(db: DatabaseSync, type: string, id: string) {
+  const source = sourceMode(db, type, id);
+  if (source?.sourceMode === 'markdown') {
+    throw new WorkDbError('Markdown 원본으로 전환된 문서는 legacy DB 본문에 쓸 수 없습니다.', 409, 'WIKI_LEGACY_WRITE_BLOCKED');
+  }
+}
 function target(db: DatabaseSync, type: string, id: string) {
   check(Object.hasOwn(tables, type), 'Wiki 대상 유형 오류');
   const value = get(db, `SELECT * FROM ${tables[type]} WHERE id=? AND archived_at IS NULL`, id);
@@ -71,7 +99,16 @@ export function wikiIndex(query = '') {
       const nameColumn = type === 'matter' ? 'our_ref' : type === 'group' ? 'group_ref' : 'name';
       for (const r of db.prepare(`SELECT id,${nameColumn} AS label,note,row_version FROM ${table} WHERE archived_at IS NULL AND ${nameColumn} LIKE ? ORDER BY ${nameColumn}`).all(`%${query.slice(0, 100)}%`) as Row[]) {
         const revision = get(db, 'SELECT version FROM entity_wiki_revision WHERE entity_type=? AND entity_id=? ORDER BY version DESC LIMIT 1', type, r.id);
-        list.push({ ...r, type, version: revision?.version || 0, entryCount: activeEntries(db, type, r.id).length });
+        const source = sourceMode(db, type, r.id);
+        list.push({
+          ...r,
+          type,
+          sourceMode: source?.sourceMode ?? 'legacy_db',
+          markdownDocId: source?.docId ?? null,
+          markdownRelativePath: source?.relativePath ?? null,
+          version: source?.sourceMode === 'markdown' ? Number(source.revisionNumber ?? 0) : revision?.version || 0,
+          entryCount: activeEntries(db, type, r.id).length,
+        });
       }
     }
     return list;
@@ -80,7 +117,9 @@ export function wikiIndex(query = '') {
 export function wikiDetail(type: string, id: string) {
   return withDatabase(db => {
     const context = snapshot(db, type, id);
-    const revisions = (db.prepare('SELECT w.*,r.model,r.reasoning_effort,r.prompt_version FROM entity_wiki_revision w JOIN decision_run r ON r.id=w.run_id WHERE w.entity_type=? AND w.entity_id=? ORDER BY w.version DESC').all(type, id) as Row[]).map((r): Row => ({ ...r, sections: JSON.parse(r.sections_json) }));
+    const legacyRevisions = (db.prepare('SELECT w.*,r.model,r.reasoning_effort,r.prompt_version FROM entity_wiki_revision w JOIN decision_run r ON r.id=w.run_id WHERE w.entity_type=? AND w.entity_id=? ORDER BY w.version DESC').all(type, id) as Row[]).map((r): Row => ({ ...r, sections: JSON.parse(r.sections_json) }));
+    const source = sourceMode(db, type, id);
+    const revisions = source?.sourceMode === 'markdown' ? [] : legacyRevisions;
     const drafts = (db.prepare('SELECT w.*,r.model,r.reasoning_effort FROM wiki_draft w JOIN decision_run r ON r.id=w.run_id WHERE w.entity_type=? AND w.entity_id=? ORDER BY w.created_at DESC').all(type, id) as Row[]).map((r): Row => ({ ...r, sections: JSON.parse(r.sections_json) }));
     const legacy = type === 'matter' ? db.prepare('SELECT * FROM wiki_revision WHERE matter_id=? ORDER BY version DESC').all(id) : [];
     const related = type === 'matter' ? [
@@ -89,7 +128,29 @@ export function wikiDetail(type: string, id: string) {
       ...db.prepare(`SELECT 'group' type,g.id,g.group_ref label FROM matter_group g JOIN matter_group_member m ON m.group_id=g.id WHERE m.matter_id=? AND g.archived_at IS NULL`).all(id),
     ] : context.matters.map(m => ({ type: 'matter', id: m!.id, label: m!.our_ref }));
     const issues = sourceIssues(db, context.entries);
-    return { ...context, revisions, drafts, related, legacy, sourceIssues: issues, stale: Boolean(revisions[0] && (revisions[0].input_hash !== sourceFingerprint(context) || issues.length)) };
+    return {
+      ...context,
+      previous: source?.sourceMode === 'markdown' ? null : context.previous,
+      baseVersion: source?.sourceMode === 'markdown' ? Number(source.revisionNumber ?? 0) : context.baseVersion,
+      sourceMode: source?.sourceMode ?? 'legacy_db',
+      markdown: source?.sourceMode === 'markdown' ? {
+        docId: source.docId,
+        relativePath: source.relativePath,
+        byteHash: source.byteHash,
+        parseStatus: source.parseStatus,
+        currentRevisionId: source.currentRevisionId,
+        revisionNumber: source.revisionNumber,
+      } : null,
+      revisions,
+      legacyRevisions,
+      drafts,
+      related,
+      legacy,
+      sourceIssues: issues,
+      stale: source?.sourceMode === 'markdown'
+        ? source.parseStatus !== 'valid'
+        : Boolean(revisions[0] && (revisions[0].input_hash !== sourceFingerprint(context) || issues.length)),
+    };
   });
 }
 
@@ -196,6 +257,7 @@ export function prepareWiki(type: string, id: string, retryOf?: string) {
   const root = process.env.SSPAT_PROJECT_ROOT || path.resolve(process.cwd(), '..');
   const contract = readFileSync(path.join(root, 'config/wiki-contract.md'), 'utf8');
   return withDatabase(db => transaction(db, () => {
+    assertLegacyWikiWrite(db, type, id);
     const wiki = snapshot(db, type, id); check(wiki.entries.length > 0, '먼저 날짜별 기록을 추가하거나 검증된 메일 관찰을 연결하세요.', 409);
     check(!sourceIssues(db,wiki.entries).length, '메일 근거 검증 또는 사용자 판단이 변경되었습니다. 먼저 해당 기록을 정정하세요.', 409);
     if (retryOf) {
@@ -222,6 +284,7 @@ export function ingestWiki(result: WikiResult) {
   check(result?.schemaVersion === 1, 'Wiki 출력 버전 오류'); text(result.changeSummary, 1000);
   const packet = wikiPacket(result.runId), old = packet.context.wiki;
   return withDatabase(db => transaction(db, () => {
+    assertLegacyWikiWrite(db, old.type, old.id);
     const run = get(db, 'SELECT * FROM decision_run WHERE id=?', result.runId)!;
     if (run.status === 'succeeded') { check(run.output_hash === hash(result), '기존 결과를 덮어쓸 수 없습니다.', 409); return { runId: result.runId, duplicate: true }; }
     check(run.status === 'started' && run.execution_ref && run.model, '실제 모델 실행을 먼저 연결하세요.', 409);
@@ -262,6 +325,7 @@ export function reviewWiki(runId: string, action: string, expectedVersion: numbe
     check(draft.review_status === 'pending' && draft.row_version === expectedVersion, '이미 검토되었거나 변경된 초안입니다.', 409);
     const old = packet.context.wiki;
     if (action === 'publish') {
+      assertLegacyWikiWrite(db, draft.entity_type, draft.entity_id);
       const current = snapshot(db, draft.entity_type, draft.entity_id);
       check(!sourceIssues(db,current.entries).length, '메일 근거 검증 또는 사용자 판단이 변경되었습니다.', 409);
       check(sourceFingerprint(old) === sourceFingerprint(current) && current.baseVersion === draft.base_version, '기록·업무·관계 또는 Wiki가 변경되었습니다. 최신 입력으로 재생성하세요.', 409);

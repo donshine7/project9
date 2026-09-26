@@ -61,6 +61,12 @@ npm run wiki:migrate:dry-run -- --output-root '<SSPAT_ISOLATED_ROOT>\migration-r
 
 게시 개정은 history/active 후보로, pending·rejected 초안은 proposals로 분리됩니다. 실제 업무 Vault와 레거시 DB 행, source mode는 바꾸지 않습니다. 기존 출력 폴더는 manifest와 모든 산출물 hash가 일치할 때만 멱등 재실행으로 인정합니다. 합성 회귀는 `npm run test:wiki-stage4`로 실행합니다.
 
+### Wiki 원본 전환·복원 리허설
+
+`npm run wiki:cutover -- cutover REQUEST.json`은 `development`·`eval`·`test` 격리 프로필에서만 실행됩니다. 요청에는 한 번에 1~5개 문서의 승인된 현재 byte hash와 `applied_observed` 제안 ID, 검토자 `장진태`, 확인 문자열 `CUTOVER`, 격리 루트 아래의 새 bundle 경로가 필요합니다. 전환 전에 DB와 Vault를 함께 스냅샷하고, 성공한 문서는 `markdown` 원본 모드로 바꾸며 legacy DB 본문 쓰기를 차단합니다.
+
+`npm run wiki:cutover -- rehearse CUTOVER_RUN_ID RESTORE_ROOT`는 기존 경로를 덮어쓰지 않는 새 사본 폴더에서 DB quick check와 문서·revision·proposal review·source-mode event·파일 hash를 대조합니다. 운영 프로필 전환은 실제 대상 목록의 별도 승인 전까지 코드에서 차단됩니다. 합성 회귀는 `npm run test:wiki-stage6`, 독립 평가 명령은 `../eval/README.md`를 사용합니다.
+
 `/provisional`의 초기화 버튼은 고정 PowerShell 스크립트를 localhost에서만 호출합니다. 프로젝트명과 `PT` + 숫자 6자리 사건번호를 검증하고, 기존 폴더는 덮어쓰지 않으며, `.staging-*`에서 만든 뒤 최종 폴더로 원자적으로 이동합니다. `검증만 실행(dry-run)`을 켜면 실제 폴더를 만들지 않고 입력과 경로만 확인합니다.
 # 3단계 분석·검토
 

@@ -13,7 +13,10 @@
 .wiki-eval/
 .wiki-stage5-test/
 .wiki-eval-vertical/
+.wiki-stage6-test/
+.wiki-eval-cutover/
 .smoke-runtime/
+.smoke-runtime-stage6/
 .eval-runs/
 .registration-test/
 .analysis-ingest/

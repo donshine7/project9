@@ -68,6 +68,24 @@ npm run eval:wiki:vertical:grader -- `
 
 통과 기준은 4개 대상 모두 `automaticApply=false`, 수동 반영 전 활성 Markdown byte hash 불변, 제안 `applied_observed`, 최종 검토 상태 `up_to_date`, DB/Vault/출력 hash 일치다.
 
+## EVAL-03 원본 전환·복원
+
+Stage 5의 `wiki-vertical-v1` 합성 문서 4개를 고정 입력으로 재사용한다. Runner가 각 문서의 legacy revision을 합성하고 `legacy_db → markdown` 전환, legacy 본문 쓰기 차단, DB+Vault 사본 복원 리허설을 수행한다. Runner에는 기대값을 두지 않고 Grader의 `wiki-cutover-v1.expected.json`에서 독립 채점한다.
+
+```powershell
+npm run eval:wiki:cutover:runner -- `
+  --dataset 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\datasets\wiki-vertical-v1' `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\stage6-<commit>-001' `
+  --run-id 'stage6-<commit>-001'
+
+npm run eval:wiki:cutover:grader -- `
+  --run-root 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalRunner\runs\stage6-<commit>-001' `
+  --expected 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\graders\dev\wiki-cutover-v1.expected.json' `
+  --report 'C:\ChatGPT\AI-Work\20_업무자동화\상상업무자동화_EvalGrader\reports\stage6-<commit>-001.json'
+```
+
+통과 기준은 전환 대상 4개 모두 Markdown 원본 모드, legacy revision 보존, legacy 본문 쓰기 차단, 승인·event·hash 연결 유지, 복원 사본 DB/Vault hash 일치, 운영 경로 미변경이다.
+
 ## 개발 fixture와 holdout
 
 - `wiki-dev-v1`과 `eval/graders/dev`는 도구 회귀를 위한 공개 fixture다. 모델 품질을 증명하는 비공개 holdout이 아니다.
