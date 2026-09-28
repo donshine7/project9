@@ -9,6 +9,7 @@ import {
   wikiMarkdownIndex,
   wikiMarkdownScanIssues,
 } from '../lib/wiki-markdown';
+import { wikiDetail, wikiIndex } from '../lib/wiki';
 import { withDatabase } from '../lib/work-db';
 
 const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'sspat-wiki-markdown-'));
@@ -75,6 +76,13 @@ async function main() {
         reason: 'new_document_without_legacy_source',
       });
     });
+    const wikiIndexEntity: any = (wikiIndex() as any[]).find((item) => item.id === 'eval-matter-001');
+    assert.equal(wikiIndexEntity.sourceMode, 'markdown');
+    assert.equal(wikiIndexEntity.markdownDocId, 'wiki-eval-matter-001');
+    const wikiEntityDetail: any = wikiDetail('matter', 'eval-matter-001');
+    assert.equal(wikiEntityDetail.sourceMode, 'markdown');
+    assert.equal(wikiEntityDetail.markdown.docId, 'wiki-eval-matter-001');
+    assert.equal(wikiEntityDetail.markdown.relativePath, '10_Matters/P260001-CN-PA.md');
 
     withDatabase((db) => {
       const documentColumns = db.prepare('PRAGMA table_info(wiki_document)').all() as Array<{ name: string }>;

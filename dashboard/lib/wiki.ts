@@ -32,9 +32,10 @@ function sourceMode(db: DatabaseSync, type: string, id: string) {
     FROM wiki_document_source_mode s
     JOIN wiki_document d ON d.doc_id=s.doc_id
     LEFT JOIN wiki_markdown_revision r ON r.id=d.current_revision_id
-    WHERE s.legacy_entity_type=? AND s.legacy_entity_id=?
+    WHERE (s.legacy_entity_type=? AND s.legacy_entity_id=?)
+       OR (s.source_mode='markdown' AND d.entity_type=? AND d.entity_id=?)
     ORDER BY s.changed_at DESC,s.doc_id
-  `).all(type, id) as Row[];
+  `).all(type, id, type, id) as Row[];
   const markdown = rows.filter((row) => row.sourceMode === 'markdown');
   if (markdown.length > 1) throw new WorkDbError('동일 엔티티에 Markdown 원본 문서가 둘 이상 연결되었습니다.', 409, 'WIKI_SOURCE_MODE_CONFLICT');
   return markdown[0] ?? rows[0] ?? null;
