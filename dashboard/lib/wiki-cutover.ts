@@ -23,7 +23,8 @@ type Row = Record<string, any>;
 export type WikiCutoverTarget = {
   docId: string;
   expectedByteHash: string;
-  proposalId: string;
+  proposalId?: string;
+  documentApprovalEventId?: string;
 };
 
 export type WikiCutoverRequest = {
@@ -47,15 +48,35 @@ function normalizedRelative(root: string, candidate: string) {
 
 function assertIdentifier(value: unknown, label: string) {
   check(typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$/.test(value), `${label} 형식이 올바르지 않습니다.`);
-  return value;
+  return String(value);
 }
 
-function isolatedRoot() {
+function normalizedPath(candidate: string) {
+  const resolved = path.resolve(candidate);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function cutoverEnvironment(authorizationId: string) {
   const profile = runtimeProfile();
-  check(profile !== 'operational', '운영 프로필의 원본 전환은 별도 대상 승인 전까지 차단됩니다.', 409, 'WIKI_CUTOVER_OPERATIONAL_BLOCKED');
+  if (profile === 'operational') {
+    const confirmation = String(process.env.SSPAT_OPERATIONAL_WIKI_CUTOVER_AUTHORIZATION ?? '').trim();
+    check(confirmation === `CUTOVER:${authorizationId}`, '운영 원본 전환에는 실행별 환경 승인이 필요합니다.', 409, 'WIKI_CUTOVER_OPERATIONAL_BLOCKED');
+    const value = String(process.env.SSPAT_OPERATIONAL_WIKI_CUTOVER_ROOT ?? '').trim();
+    check(value, '운영 원본 전환에는 전용 백업·복구 루트가 필요합니다.', 409, 'WIKI_CUTOVER_OPERATIONAL_ROOT_REQUIRED');
+    const root = path.resolve(value);
+    check(root !== path.parse(root).root, '드라이브 루트를 운영 원본 전환 루트로 사용할 수 없습니다.', 409, 'WIKI_CUTOVER_PATH_BLOCKED');
+    check(existsSync(root), '운영 원본 전환 루트를 먼저 만들어야 합니다.', 409, 'WIKI_CUTOVER_OPERATIONAL_ROOT_REQUIRED');
+    const expectedDatabase = String(process.env.SSPAT_OPERATIONAL_WIKI_CUTOVER_DATABASE ?? '').trim();
+    const expectedVault = String(process.env.SSPAT_OPERATIONAL_WIKI_CUTOVER_VAULT ?? '').trim();
+    check(expectedDatabase && normalizedPath(expectedDatabase) === normalizedPath(databasePath()), '운영 DB 경로 이중 확인이 일치하지 않습니다.', 409, 'WIKI_CUTOVER_OPERATIONAL_PATH_MISMATCH');
+    check(expectedVault && normalizedPath(expectedVault) === normalizedPath(resolveWikiVaultPath()), '운영 Vault 경로 이중 확인이 일치하지 않습니다.', 409, 'WIKI_CUTOVER_OPERATIONAL_PATH_MISMATCH');
+    check(!pathIsInside(root, databasePath()) && !pathIsInside(databasePath(), root), '운영 원본 전환 루트와 DB 경로가 겹칩니다.', 409, 'WIKI_CUTOVER_PATH_BLOCKED');
+    check(!pathIsInside(root, resolveWikiVaultPath()) && !pathIsInside(resolveWikiVaultPath(), root), '운영 원본 전환 루트와 Vault 경로가 겹칩니다.', 409, 'WIKI_CUTOVER_PATH_BLOCKED');
+    return { profile, root, operational: true };
+  }
   const value = String(process.env.SSPAT_ISOLATED_ROOT ?? '').trim();
   check(value, '격리 원본 전환에는 SSPAT_ISOLATED_ROOT가 필요합니다.', 409, 'WIKI_CUTOVER_ISOLATED_ROOT_REQUIRED');
-  return { profile, root: path.resolve(value) };
+  return { profile, root: path.resolve(value), operational: false };
 }
 
 function assertDirectory(root: string, candidate: string, label: string) {
@@ -63,6 +84,12 @@ function assertDirectory(root: string, candidate: string, label: string) {
   const info = lstatSync(candidate);
   check(info.isDirectory() && !info.isSymbolicLink(), `${label}은 실제 디렉터리여야 합니다.`, 409, 'WIKI_CUTOVER_PATH_BLOCKED');
   check(pathIsInside(realpathSync(root), realpathSync(candidate)), `${label} 경로가 격리 루트를 벗어났습니다.`, 409, 'WIKI_CUTOVER_PATH_BLOCKED');
+}
+
+function assertPhysicalDirectory(candidate: string, label: string) {
+  const info = lstatSync(candidate);
+  check(info.isDirectory() && !info.isSymbolicLink(), `${label}은 실제 디렉터리여야 합니다.`, 409, 'WIKI_CUTOVER_PATH_BLOCKED');
+  check(normalizedPath(realpathSync(candidate)) === normalizedPath(candidate), `${label} 경로가 다른 실제 경로를 가리킵니다.`, 409, 'WIKI_CUTOVER_PATH_BLOCKED');
 }
 
 function visitFiles(root: string) {
@@ -122,6 +149,83 @@ function readJson(file: string) {
   return JSON.parse(readFileSync(file, 'utf8')) as Row;
 }
 
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function citedEventIds(markdown: string) {
+  return [...markdown.matchAll(/^\[\^[^\]]+\]:\s*event:([0-9a-f-]{36})\s*$/gim)]
+    .map((match) => match[1])
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .sort();
+}
+
+function eventSnapshot(event: Row) {
+  return {
+    id: event.id,
+    entityType: event.entity_type,
+    entityId: event.entity_id,
+    eventType: event.event_type,
+    beforeJson: event.before_json,
+    afterJson: event.after_json,
+    actor: event.actor,
+    sourceType: event.source_type,
+    correlationId: event.correlation_id,
+    createdAt: event.created_at,
+  };
+}
+
+function verifiedDocumentApproval(db: DatabaseSync, input: {
+  approvalEventId: string;
+  document: Row;
+  revision: Row;
+  markdown: string;
+  expectedByteHash: string;
+  reviewer: string;
+}) {
+  const approval = db.prepare('SELECT * FROM event WHERE id=?').get(input.approvalEventId) as Row | undefined;
+  check(approval?.event_type === 'wiki.document_approved', '문서 원문 승인 이벤트가 없습니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
+  check(approval.entity_type === input.document.entity_type && approval.entity_id === input.document.entity_id, '문서 승인 이벤트가 다른 엔티티에 연결되어 있습니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
+  check(approval.actor === input.reviewer && approval.source_type === 'user_input' && approval.correlation_id === input.document.doc_id, '문서 승인 이벤트의 검토자 또는 연결이 다릅니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
+  const payload = JSON.parse(String(approval.after_json ?? 'null')) as Row | null;
+  check(
+    payload?.schema === 'wiki-document-approval-v1'
+      && payload.approval === 'approve_as_is'
+      && payload.docId === input.document.doc_id
+      && payload.byteHash === input.expectedByteHash
+      && payload.textHash === input.document.text_hash
+      && payload.revisionId === input.revision.id
+      && payload.sourceMode === 'legacy_db'
+      && payload.automaticApply === false
+      && payload.sourceCutoverPerformed === false,
+    '문서 승인 이벤트가 현재 문서 hash·revision과 일치하지 않습니다.',
+    409,
+    'WIKI_CUTOVER_REVIEW_STALE',
+  );
+  const feedback = db.prepare("SELECT * FROM user_feedback WHERE event_id=? AND actor_id=? AND feedback_action='accept' AND reason_code='approved_as_is' ORDER BY created_at DESC,id DESC LIMIT 1")
+    .get(input.approvalEventId, input.reviewer) as Row | undefined;
+  check(feedback, '문서 원문 승인에 연결된 사용자 피드백이 없습니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
+  const finalValue = JSON.parse(String(feedback.final_value_json ?? 'null')) as Row | null;
+  check(finalValue?.docId === input.document.doc_id && finalValue?.byteHash === input.expectedByteHash && finalValue?.approval === 'approve_as_is', '사용자 피드백이 현재 문서 승인과 일치하지 않습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+
+  const ids = citedEventIds(input.markdown);
+  check(ids.length > 0, '승인 문서에 검증할 근거 이벤트가 없습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  const evidence = ids.map((id) => {
+    const event = db.prepare('SELECT * FROM event WHERE id=?').get(id) as Row | undefined;
+    check(event, `승인 문서의 근거 이벤트가 없습니다: ${id}`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+    check(event.entity_type === input.document.entity_type && event.entity_id === input.document.entity_id, `승인 문서가 다른 엔티티의 근거를 인용합니다: ${id}`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+    return { eventId: id, eventHash: sha256(canonical(eventSnapshot(event))) };
+  });
+  const evidenceSnapshotHash = sha256(canonical(evidence));
+  check(canonical(payload.evidenceEventIds) === canonical(ids) && payload.evidenceSnapshotHash === evidenceSnapshotHash, '승인 후 문서 근거가 변경되었습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  return { approval, feedback, payload, evidenceSnapshotHash };
+}
+
 function writeExclusiveJson(file: string, value: unknown) {
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
 }
@@ -142,16 +246,22 @@ export function wikiCutoverRun(runId: string) {
   return withDatabase((db) => runRows(db, runId));
 }
 
-async function preflightTargets(targets: WikiCutoverTarget[]) {
+async function preflightTargets(targets: WikiCutoverTarget[], reviewer: string) {
   check(Array.isArray(targets) && targets.length >= 1 && targets.length <= 5, '원본 전환 대상은 한 번에 1~5개여야 합니다.');
   check(new Set(targets.map((target) => target.docId)).size === targets.length, '원본 전환 대상 doc_id가 중복되었습니다.');
   const prepared: Row[] = [];
   for (const target of targets) {
     assertIdentifier(target.docId, 'doc_id');
-    assertIdentifier(target.proposalId, 'proposal_id');
+    const proposalId = target.proposalId ? assertIdentifier(target.proposalId, 'proposal_id') : null;
+    const documentApprovalEventId = target.documentApprovalEventId
+      ? assertIdentifier(target.documentApprovalEventId, 'document_approval_event_id')
+      : null;
+    check(Boolean(proposalId) !== Boolean(documentApprovalEventId), '제안 승인 또는 문서 원문 승인 중 하나만 지정해야 합니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
     check(/^[a-f0-9]{64}$/.test(target.expectedByteHash), 'expectedByteHash는 SHA-256이어야 합니다.');
-    const reconciliation = await reconcileWikiMarkdownProposal(target.proposalId);
-    check(reconciliation.status === 'applied_observed' && !reconciliation.evidenceStale, '현재 파일과 근거에 다시 대조된 적용 관측 제안이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+    if (proposalId) {
+      const reconciliation = await reconcileWikiMarkdownProposal(proposalId);
+      check(reconciliation.status === 'applied_observed' && !reconciliation.evidenceStale, '현재 파일과 근거에 다시 대조된 적용 관측 제안이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+    }
     const source = await readWikiMarkdownSource(target.docId);
     check(!source.indexStale, `${target.docId}의 파일과 인덱스 hash가 다릅니다.`, 409, 'WIKI_CUTOVER_INDEX_STALE');
     check(source.byteHash === target.expectedByteHash, `${target.docId}의 현재 Markdown hash가 승인값과 다릅니다.`, 409, 'WIKI_CUTOVER_HASH_MISMATCH');
@@ -164,24 +274,40 @@ async function preflightTargets(targets: WikiCutoverTarget[]) {
       check(sourceMode.legacy_entity_type === document.entity_type && sourceMode.legacy_entity_id === document.entity_id, 'legacy 원본 연결과 Markdown 엔티티 연결이 다릅니다.', 409, 'WIKI_CUTOVER_BINDING_MISMATCH');
       const revision = db.prepare('SELECT * FROM wiki_markdown_revision WHERE id=?').get(document.current_revision_id) as Row | undefined;
       check(revision?.byte_hash === target.expectedByteHash, '현재 Markdown revision hash가 승인값과 다릅니다.', 409, 'WIKI_CUTOVER_REVISION_MISMATCH');
-      const proposal = db.prepare('SELECT * FROM wiki_proposal WHERE id=? AND doc_id=?').get(target.proposalId, target.docId) as Row | undefined;
-      check(proposal?.status === 'applied_observed' && proposal.target_byte_hash === target.expectedByteHash, '현재 파일로 수동 반영이 관측된 제안이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
-      const review = db.prepare(`SELECT * FROM wiki_proposal_review WHERE proposal_id=? AND action='accept_for_manual_apply' ORDER BY created_at DESC,id DESC LIMIT 1`).get(target.proposalId) as Row | undefined;
-      check(review, '사람의 수동 반영 승인 기록이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
-      check(review.reviewed_evidence_snapshot_hash === proposal.evidence_snapshot_hash, '사람이 검토한 근거 snapshot과 제안 근거가 다릅니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+      let proposal: Row | null = null;
+      let review: Row | null = null;
+      let documentApproval: ReturnType<typeof verifiedDocumentApproval> | null = null;
+      if (proposalId) {
+        proposal = (db.prepare('SELECT * FROM wiki_proposal WHERE id=? AND doc_id=?').get(proposalId, target.docId) as Row | undefined) ?? null;
+        check(proposal?.status === 'applied_observed' && proposal.target_byte_hash === target.expectedByteHash, '현재 파일로 수동 반영이 관측된 제안이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
+        review = (db.prepare(`SELECT * FROM wiki_proposal_review WHERE proposal_id=? AND action='accept_for_manual_apply' ORDER BY created_at DESC,id DESC LIMIT 1`).get(proposalId) as Row | undefined) ?? null;
+        check(review, '사람의 수동 반영 승인 기록이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
+        check(review.reviewed_evidence_snapshot_hash === proposal.evidence_snapshot_hash, '사람이 검토한 근거 snapshot과 제안 근거가 다릅니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+      } else {
+        documentApproval = verifiedDocumentApproval(db, {
+          approvalEventId: documentApprovalEventId!,
+          document,
+          revision,
+          markdown: source.normalized,
+          expectedByteHash: target.expectedByteHash,
+          reviewer,
+        });
+      }
       const legacy = db.prepare('SELECT * FROM entity_wiki_revision WHERE entity_type=? AND entity_id=? ORDER BY version DESC LIMIT 1').get(document.entity_type, document.entity_id) as Row | undefined;
       check(legacy, '전환 전 보존할 legacy Wiki revision이 없습니다.', 409, 'WIKI_CUTOVER_LEGACY_REQUIRED');
-      return { document, sourceMode, revision, proposal, review, legacy };
+      return { document, sourceMode, revision, proposal, review, documentApproval, legacy };
     });
     prepared.push({
       docId: target.docId,
       expectedByteHash: target.expectedByteHash,
-      proposalId: target.proposalId,
+      approvalKind: proposalId ? 'proposal' : 'document',
+      proposalId,
+      documentApprovalEventId,
       relativePath: row.document.relative_path,
       entityType: row.document.entity_type,
       entityId: row.document.entity_id,
       markdownRevisionId: row.revision.id,
-      proposalReviewId: row.review.id,
+      proposalReviewId: row.review?.id ?? null,
       legacyRevisionId: row.legacy.id,
     });
   }
@@ -189,8 +315,8 @@ async function preflightTargets(targets: WikiCutoverTarget[]) {
 }
 
 export async function executeWikiCutover(request: WikiCutoverRequest) {
-  const environment = isolatedRoot();
   const authorizationId = assertIdentifier(request.authorizationId, 'authorizationId');
+  const environment = cutoverEnvironment(authorizationId);
   check(request.reviewer === '장진태', '인증된 원본 전환 검토자만 허용합니다.', 403, 'WIKI_CUTOVER_REVIEWER_FORBIDDEN');
   check(request.confirmation === 'CUTOVER', '원본 전환 확인 문자열이 올바르지 않습니다.', 400, 'WIKI_CUTOVER_CONFIRMATION_REQUIRED');
   const existing = withDatabase((db) => db.prepare('SELECT id,status FROM wiki_cutover_run WHERE authorization_id=?').get(authorizationId) as Row | undefined);
@@ -199,16 +325,27 @@ export async function executeWikiCutover(request: WikiCutoverRequest) {
     return { ...wikiCutoverRun(existing.id), duplicate: true };
   }
 
-  const targets = await preflightTargets(request.targets);
+  const targets = await preflightTargets(request.targets, request.reviewer);
   const vaultRoot = resolveWikiVaultPath();
-  assertDirectory(environment.root, vaultRoot, 'Wiki Vault');
+  if (environment.operational) assertPhysicalDirectory(vaultRoot, 'Wiki Vault');
+  else assertDirectory(environment.root, vaultRoot, 'Wiki Vault');
   const bundleParent = path.resolve(request.bundleRoot);
   check(bundleParent !== environment.root && pathIsInside(environment.root, bundleParent), '백업 묶음 루트는 격리 루트의 하위 폴더여야 합니다.', 409, 'WIKI_CUTOVER_PATH_BLOCKED');
   check(!pathIsInside(vaultRoot, bundleParent) && !pathIsInside(bundleParent, vaultRoot), '백업 묶음과 Wiki Vault는 서로 포함할 수 없습니다.', 409, 'WIKI_CUTOVER_PATH_BLOCKED');
   mkdirSync(bundleParent, { recursive: true });
   assertDirectory(environment.root, bundleParent, '백업 묶음 루트');
 
-  const requestHash = sha256(JSON.stringify({ authorizationId, reviewer: request.reviewer, targets: targets.map((target) => [target.docId, target.expectedByteHash, target.proposalId]).sort() }));
+  const requestHash = sha256(JSON.stringify({
+    authorizationId,
+    reviewer: request.reviewer,
+    targets: targets.map((target) => [
+      target.docId,
+      target.expectedByteHash,
+      target.approvalKind,
+      target.proposalId,
+      target.documentApprovalEventId,
+    ]).sort(),
+  }));
   const runId = `wiki-cutover-${requestHash.slice(0, 24)}`;
   const finalBundle = path.join(bundleParent, runId);
   const stagingBundle = path.join(bundleParent, `.staging-${runId}`);
@@ -239,7 +376,15 @@ export async function executeWikiCutover(request: WikiCutoverRequest) {
             target.entityId,
             'wiki.source_mode_changed',
             JSON.stringify({ docId: target.docId, sourceMode: 'legacy_db', legacyRevisionId: target.legacyRevisionId }),
-            JSON.stringify({ docId: target.docId, sourceMode: 'markdown', byteHash: target.expectedByteHash, markdownRevisionId: target.markdownRevisionId, automaticApply: false }),
+            JSON.stringify({
+              docId: target.docId,
+              sourceMode: 'markdown',
+              byteHash: target.expectedByteHash,
+              markdownRevisionId: target.markdownRevisionId,
+              approvalKind: target.approvalKind,
+              approvalId: target.documentApprovalEventId ?? target.proposalReviewId,
+              automaticApply: false,
+            }),
             request.reviewer,
             'user_input',
             authorizationId,
@@ -248,8 +393,22 @@ export async function executeWikiCutover(request: WikiCutoverRequest) {
         const changed = db.prepare(`UPDATE wiki_document_source_mode SET source_mode='markdown',changed_by_event_id=?,changed_at=? WHERE doc_id=? AND source_mode='legacy_db'`)
           .run(eventId, createdAt, target.docId);
         check(Number(changed.changes) === 1, `${target.docId}의 원본 모드가 동시에 변경되었습니다.`, 409, 'WIKI_CUTOVER_SOURCE_MODE_RACE');
-        db.prepare(`INSERT INTO wiki_cutover_item(id,cutover_run_id,doc_id,entity_type,entity_id,previous_source_mode,new_source_mode,expected_byte_hash,markdown_revision_id,proposal_id,proposal_review_id,legacy_revision_id,source_change_event_id,created_at) VALUES (?,?,?,?,?,'legacy_db','markdown',?,?,?,?,?,?,?)`)
-          .run(randomUUID(), runId, target.docId, target.entityType, target.entityId, target.expectedByteHash, target.markdownRevisionId, target.proposalId, target.proposalReviewId, target.legacyRevisionId, eventId, createdAt);
+        db.prepare(`INSERT INTO wiki_cutover_item(id,cutover_run_id,doc_id,entity_type,entity_id,previous_source_mode,new_source_mode,expected_byte_hash,markdown_revision_id,proposal_id,proposal_review_id,document_approval_event_id,legacy_revision_id,source_change_event_id,created_at) VALUES (?,?,?,?,?,'legacy_db','markdown',?,?,?,?,?,?,?,?)`)
+          .run(
+            randomUUID(),
+            runId,
+            target.docId,
+            target.entityType,
+            target.entityId,
+            target.expectedByteHash,
+            target.markdownRevisionId,
+            target.proposalId,
+            target.proposalReviewId,
+            target.documentApprovalEventId,
+            target.legacyRevisionId,
+            eventId,
+            createdAt,
+          );
       }
       db.prepare(`UPDATE wiki_cutover_run SET status='applied' WHERE id=?`).run(runId);
     }));
@@ -280,8 +439,10 @@ export async function executeWikiCutover(request: WikiCutoverRequest) {
         relativePath: target.relativePath,
         byteHash: target.expectedByteHash,
         markdownRevisionId: target.markdownRevisionId,
+        approvalKind: target.approvalKind,
         proposalId: target.proposalId,
         proposalReviewId: target.proposalReviewId,
+        documentApprovalEventId: target.documentApprovalEventId,
         legacyRevisionId: target.legacyRevisionId,
         sourceMode: 'markdown',
       })),
@@ -314,8 +475,8 @@ function safeBundleItem(bundle: string, relative: unknown, label: string) {
 }
 
 export function rehearseWikiRecovery(cutoverRunId: string, restoreRootInput: string) {
-  const environment = isolatedRoot();
   const cutover = wikiCutoverRun(cutoverRunId);
+  const environment = cutoverEnvironment(cutover.run.authorization_id);
   check(cutover.run.status === 'succeeded', '성공한 원본 전환 실행만 복원 리허설할 수 있습니다.', 409, 'WIKI_RECOVERY_CUTOVER_NOT_READY');
   const bundle = path.resolve(cutover.run.bundle_path);
   check(pathIsInside(environment.root, bundle) && existsSync(bundle), '원본 전환 백업 묶음 경로가 유효하지 않습니다.', 409, 'WIKI_RECOVERY_BUNDLE_INVALID');
@@ -348,29 +509,62 @@ export function rehearseWikiRecovery(cutoverRunId: string, restoreRootInput: str
       const sourceMode = restoredDb.prepare('SELECT * FROM wiki_document_source_mode WHERE doc_id=?').get(target.docId) as Row | undefined;
       const document = restoredDb.prepare('SELECT * FROM wiki_document WHERE doc_id=?').get(target.docId) as Row | undefined;
       const revision = restoredDb.prepare('SELECT * FROM wiki_markdown_revision WHERE id=?').get(target.markdownRevisionId) as Row | undefined;
-      const proposal = restoredDb.prepare('SELECT * FROM wiki_proposal WHERE id=?').get(target.proposalId) as Row | undefined;
-      const review = restoredDb.prepare('SELECT * FROM wiki_proposal_review WHERE id=?').get(target.proposalReviewId) as Row | undefined;
       const item = restoredDb.prepare('SELECT * FROM wiki_cutover_item WHERE cutover_run_id=? AND doc_id=?').get(cutoverRunId, target.docId) as Row | undefined;
       const event = item ? restoredDb.prepare('SELECT * FROM event WHERE id=?').get(item.source_change_event_id) as Row | undefined : undefined;
       const file = path.resolve(restoredVault, ...String(target.relativePath).split('/'));
       check(pathIsInside(restoredVault, file) && existsSync(file) && lstatSync(file).isFile() && !lstatSync(file).isSymbolicLink(), `복원 문서가 없습니다: ${target.docId}`, 409, 'WIKI_RECOVERY_DOCUMENT_MISSING');
-      const fileHash = sha256(readFileSync(file));
+      const fileBytes = readFileSync(file);
+      const fileHash = sha256(fileBytes);
       const eventAfter = event?.after_json ? JSON.parse(event.after_json) : null;
-      const passed = sourceMode?.source_mode === 'markdown'
+      const commonPassed = sourceMode?.source_mode === 'markdown'
         && document?.parse_status === 'valid'
         && document?.byte_hash === target.byteHash
         && document?.current_revision_id === target.markdownRevisionId
         && revision?.byte_hash === target.byteHash
-        && proposal?.status === 'applied_observed'
-        && proposal?.target_byte_hash === target.byteHash
-        && review?.action === 'accept_for_manual_apply'
         && event?.event_type === 'wiki.source_mode_changed'
         && eventAfter?.sourceMode === 'markdown'
         && eventAfter?.byteHash === target.byteHash
+        && eventAfter?.approvalKind === target.approvalKind
         && eventAfter?.automaticApply === false
         && fileHash === target.byteHash;
-      check(passed, `복원 문서의 원본·검토·이벤트·hash 연결이 다릅니다: ${target.docId}`, 409, 'WIKI_RECOVERY_DOCUMENT_INVALID');
-      verifications.push({ docId: target.docId, byteHash: fileHash, sourceMode: sourceMode!.source_mode, markdownRevisionId: revision!.id, proposalId: proposal!.id, proposalReviewId: review!.id, sourceChangeEventId: event!.id });
+      check(commonPassed && document && revision && item, `복원 문서의 원본·이벤트·hash 연결이 다릅니다: ${target.docId}`, 409, 'WIKI_RECOVERY_DOCUMENT_INVALID');
+
+      let approvalVerification: Row;
+      if (target.approvalKind === 'proposal') {
+        const proposal = restoredDb.prepare('SELECT * FROM wiki_proposal WHERE id=?').get(target.proposalId) as Row | undefined;
+        const review = restoredDb.prepare('SELECT * FROM wiki_proposal_review WHERE id=?').get(target.proposalReviewId) as Row | undefined;
+        check(
+          proposal?.status === 'applied_observed'
+            && proposal.target_byte_hash === target.byteHash
+            && review?.action === 'accept_for_manual_apply'
+            && item.proposal_id === proposal.id
+            && item.proposal_review_id === review.id
+            && item.document_approval_event_id === null,
+          `복원 문서의 제안 승인 연결이 다릅니다: ${target.docId}`,
+          409,
+          'WIKI_RECOVERY_DOCUMENT_INVALID',
+        );
+        approvalVerification = { approvalKind: 'proposal', proposalId: proposal.id, proposalReviewId: review.id };
+      } else {
+        const approval = verifiedDocumentApproval(restoredDb, {
+          approvalEventId: target.documentApprovalEventId,
+          document,
+          revision,
+          markdown: fileBytes.toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'),
+          expectedByteHash: target.byteHash,
+          reviewer: manifest.reviewer,
+        });
+        check(item.document_approval_event_id === approval.approval.id && item.proposal_id === null && item.proposal_review_id === null, `복원 문서의 원문 승인 연결이 다릅니다: ${target.docId}`, 409, 'WIKI_RECOVERY_DOCUMENT_INVALID');
+        approvalVerification = { approvalKind: 'document', documentApprovalEventId: approval.approval.id, evidenceSnapshotHash: approval.evidenceSnapshotHash };
+      }
+      verifications.push({
+        docId: target.docId,
+        byteHash: fileHash,
+        sourceMode: sourceMode.source_mode,
+        markdownRevisionId: revision.id,
+        ...approvalVerification,
+        sourceChangeEventId: event!.id,
+      });
     }
   } finally {
     restoredDb.close();
