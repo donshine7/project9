@@ -324,6 +324,32 @@ function insertIssue(db: DatabaseSync, scanId: string, issue: ScanIssue, timesta
     .run(randomUUID(), scanId, issue.severity, issue.code, issue.relativePath, issue.docId, issue.detail.slice(0, 2000), timestamp);
 }
 
+function initializeMarkdownSourceMode(db: DatabaseSync, candidate: Candidate, scanId: string, timestamp: string) {
+  if (candidate.frontmatter.document_type !== 'entity_wiki') return;
+  const docId = candidate.frontmatter.doc_id;
+  if (db.prepare('SELECT doc_id FROM wiki_document_source_mode WHERE doc_id=?').get(docId)) return;
+
+  const entityType = candidate.frontmatter.entity_type!;
+  const entityId = candidate.frontmatter.entity_id!;
+  const legacyRevision = db.prepare('SELECT id FROM entity_wiki_revision WHERE entity_type=? AND entity_id=? LIMIT 1').get(entityType, entityId);
+  if (legacyRevision) return;
+
+  const eventId = randomUUID();
+  db.prepare(`
+    INSERT INTO event(id,entity_type,entity_id,event_type,before_json,after_json,actor,source_type,correlation_id,created_at)
+    VALUES (?,?,?,'wiki.source_mode_initialized',NULL,?,'Wiki Markdown indexer','system',?,?)
+  `).run(eventId, entityType, entityId, JSON.stringify({
+    schema: 'wiki-source-mode-initialization-v1',
+    docId,
+    sourceMode: 'markdown',
+    reason: 'new_document_without_legacy_source',
+  }), scanId, timestamp);
+  db.prepare(`
+    INSERT INTO wiki_document_source_mode(doc_id,source_mode,legacy_entity_type,legacy_entity_id,migration_item_id,changed_by_event_id,changed_at)
+    VALUES (?,'markdown',NULL,NULL,NULL,?,?)
+  `).run(docId, eventId, timestamp);
+}
+
 export async function scanWikiMarkdownVault(options: { forceFull?: boolean } = {}) {
   const vaultRoot = resolveWikiVaultPath();
   try {
@@ -404,6 +430,7 @@ export async function scanWikiMarkdownVault(options: { forceFull?: boolean } = {
       else unchangedCount += 1;
       db.prepare(`UPDATE wiki_document SET title=?,relative_path=?,byte_hash=?,text_hash=?,file_size=?,file_mtime_ms=?,parse_status='valid',current_revision_id=?,last_seen_scan_id=?,updated_at=? WHERE doc_id=?`)
         .run(candidate.frontmatter.title, candidate.relativePath, candidate.byteHash, candidate.textHash, candidate.fileSize, candidate.mtimeMs, currentRevisionId, scanId, timestamp, docId);
+      initializeMarkdownSourceMode(db, candidate, scanId, timestamp);
       indexedCount += 1;
     }
 

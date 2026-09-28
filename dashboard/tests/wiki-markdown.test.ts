@@ -60,6 +60,23 @@ async function main() {
     assert.equal(readFileSync(historyFile, 'utf8'), readFileSync(matterFile, 'utf8'));
 
     withDatabase((db) => {
+      const sourceMode = db.prepare('SELECT source_mode,legacy_entity_type,legacy_entity_id,changed_by_event_id FROM wiki_document_source_mode WHERE doc_id=?')
+        .get('wiki-eval-matter-001') as Record<string, unknown>;
+      assert.equal(sourceMode.source_mode, 'markdown');
+      assert.equal(sourceMode.legacy_entity_type, null);
+      assert.equal(sourceMode.legacy_entity_id, null);
+      const sourceEvent = db.prepare('SELECT event_type,source_type,after_json FROM event WHERE id=?').get(String(sourceMode.changed_by_event_id)) as Record<string, unknown>;
+      assert.equal(sourceEvent.event_type, 'wiki.source_mode_initialized');
+      assert.equal(sourceEvent.source_type, 'system');
+      assert.deepEqual(JSON.parse(String(sourceEvent.after_json)), {
+        schema: 'wiki-source-mode-initialization-v1',
+        docId: 'wiki-eval-matter-001',
+        sourceMode: 'markdown',
+        reason: 'new_document_without_legacy_source',
+      });
+    });
+
+    withDatabase((db) => {
       const documentColumns = db.prepare('PRAGMA table_info(wiki_document)').all() as Array<{ name: string }>;
       const revisionColumns = db.prepare('PRAGMA table_info(wiki_markdown_revision)').all() as Array<{ name: string }>;
       const forbidden = /^(body|content|sections_json|markdown)$/;
@@ -73,6 +90,7 @@ async function main() {
     const secondDetail: any = await wikiMarkdownDetail('wiki-eval-matter-001');
     assert.equal(secondDetail.revisions.length, 2);
     assert.equal(secondDetail.revisions[0].parentRevisionId, secondDetail.revisions[1].id);
+    assert.equal(withDatabase((db) => Number((db.prepare("SELECT COUNT(*) AS count FROM event WHERE event_type='wiki.source_mode_initialized'").get() as any).count)), 1);
 
     const renamedFile = path.join(matterDirectory, 'renamed-matter.md');
     renameSync(matterFile, renamedFile);
