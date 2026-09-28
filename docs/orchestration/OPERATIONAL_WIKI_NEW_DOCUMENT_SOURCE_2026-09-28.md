@@ -1,5 +1,7 @@
 # 신규 운영 Wiki 문서 원본 등록 보완 — 2026-09-28
 
+상태: **코드 통합·운영 보정·대시보드 재시작·사후 검증 완료**
+
 ## 확인된 문제
 
 레거시 Wiki 본문이 없는 사건에 새 Markdown 문서를 생성해 인덱싱하면 `wiki_document`와 revision은 만들어지지만 `wiki_document_source_mode`가 비어 있었다. 이 경우 기존 Wiki 상세 조회는 원본을 `legacy_db`로 간주하므로 유효한 Markdown이 활성 본문으로 표시되지 않을 수 있다.
@@ -20,12 +22,20 @@
 - `wiki-stage7.test.ts`: 증분 스캔·확대 처리 회귀 통과
 - 변경 파일 `oxlint` 통과
 
-## 운영 적용 대상
+## 운영 적용 결과
 
-이번 보완으로 원본 모드가 필요한 신규 문서는 다음 3건이다.
+이번 보완으로 원본 모드가 필요한 신규 문서 3건을 적용했다.
 
 - `P261250-US`
 - `P261251-US`
 - `P261252-US`
 
-운영 적용 전 DB 백업을 만들고, 적용 후 세 문서만 `source_mode=markdown`인지와 SQLite 무결성·외래키를 확인한다.
+- 적용 전 백업: `sspat-work-2026-09-28T11-32-55-101Z.db`
+- 운영 스캔: `57ac7aa5-a4c6-40b0-9a77-a151cf30e596`
+- 스캔 결과: 7개 발견·7개 인덱싱·변경 0·이슈 0
+- 적용 후 백업: `sspat-work-2026-09-28T11-33-26-897Z.db`
+- 세 문서 모두 `source_mode=markdown`, `parse_status=valid`, `stale=false`
+- SQLite `integrity_check=ok`, 외래키 위반 0건
+- 대시보드 재시작 뒤 `/api/wiki/matter/:id` 상세 조회에서 세 Markdown 문서를 정상 확인
+
+본문은 아직 사람 검토 전이므로 세 문서의 검토 상태는 `검토 필요`로 유지한다.
