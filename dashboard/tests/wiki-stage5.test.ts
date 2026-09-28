@@ -89,6 +89,26 @@ async function main() {
       currentByteHash: 'target',
       targetByteHash: 'target',
     }), 'up_to_date');
+    assert.equal(deriveWikiReviewStatus({
+      parseStatus: 'valid',
+      currentByteHash: 'approved',
+      documentApprovalByteHash: 'approved',
+      documentApprovalCreatedAt: '2026-09-25T01:00:00.000Z',
+    }), 'reviewed');
+    assert.equal(deriveWikiReviewStatus({
+      parseStatus: 'valid',
+      currentByteHash: 'changed',
+      documentApprovalByteHash: 'approved',
+      documentApprovalCreatedAt: '2026-09-25T01:00:00.000Z',
+    }), 'needs_review');
+    assert.equal(deriveWikiReviewStatus({
+      parseStatus: 'valid',
+      proposalStatus: 'ready_for_review',
+      currentByteHash: 'approved',
+      documentApprovalByteHash: 'approved',
+      documentApprovalCreatedAt: '2026-09-25T01:00:00.000Z',
+      proposalUpdatedAt: '2026-09-25T02:00:00.000Z',
+    }), 'needs_review');
 
     mkdirSync(matterDirectory, { recursive: true });
     withDatabase((db) => {
@@ -105,6 +125,28 @@ async function main() {
 
     const initial: any = await wikiReviewIndex();
     assert.equal(initial.documents.find((item: any) => item.docId === docId).status, 'needs_review');
+
+    withDatabase((db) => {
+      const document = db.prepare('SELECT * FROM wiki_document WHERE doc_id=?').get(docId) as any;
+      const approvalPayload = {
+        schema: 'wiki-document-approval-v1',
+        approval: 'approve_as_is',
+        docId,
+        revisionId: document.current_revision_id,
+        byteHash: document.byte_hash,
+        textHash: document.text_hash,
+        evidenceSnapshotHash: 'stage5-approved-evidence',
+      };
+      db.prepare(`INSERT INTO event(id,entity_type,entity_id,event_type,after_json,actor,source_type,correlation_id,created_at) VALUES ('stage5-document-approval','matter',?,'wiki.document_approved',?,'장진태','user_input',?,'2026-09-25T01:00:00.000Z')`)
+        .run(matterId, JSON.stringify(approvalPayload), docId);
+      db.prepare(`INSERT INTO user_feedback(id,event_id,actor_id,feedback_action,final_value_json,reason_code,note,created_at) VALUES ('stage5-document-approval-feedback','stage5-document-approval','장진태','accept',?,'approved_as_is','원문 그대로 승인','2026-09-25T01:00:00.000Z')`)
+        .run(JSON.stringify(approvalPayload));
+    });
+    const approved: any = await wikiReviewIndex();
+    const approvedItem = approved.documents.find((item: any) => item.docId === docId);
+    assert.equal(approvedItem.status, 'reviewed');
+    assert.equal(approvedItem.documentApproval.eventId, 'stage5-document-approval');
+    assert.equal(approvedItem.documentApproval.byteHash, approvedItem.currentByteHash);
 
     const prepared = await prepareWikiMarkdownProposal(docId);
     bindAnalysis(prepared.runId, {
