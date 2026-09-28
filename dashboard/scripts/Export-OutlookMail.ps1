@@ -88,8 +88,10 @@ function Read-MailFolder($folder, [string]$direction) {
             try { $internetMessageId = [string]$item.PropertyAccessor.GetProperty('http://schemas.microsoft.com/mapi/proptag/0x1035001E') } catch {}
             $body = [string]$item.Body
             if ($body.Length -gt 100000) { $body = $body.Substring(0, 100000) }
+            $entryId = [string]$item.EntryID
+            if ([string]::IsNullOrWhiteSpace($entryId)) { continue }
             $script:records.Add([pscustomobject]@{
-                entryId = [string]$item.EntryID
+                entryId = $entryId
                 internetMessageId = $internetMessageId
                 conversationId = [string]$item.ConversationID
                 folderPath = [string]$folder.FolderPath
