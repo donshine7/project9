@@ -62,6 +62,13 @@ import {
   getWikiDocumentApproval,
   type AuthenticatedWikiReviewer,
 } from './lib/wiki-document-approval';
+import {
+  approveWikiAutoApply,
+  executeWikiAutoApply,
+  recoverWikiAutoApply,
+  wikiAutoApplyStatus,
+} from './lib/wiki-auto-apply';
+import type { OperationalAutoApplyGate } from './lib/wiki-auto-apply-gate';
 import { runLegacyWikiMigrationDryRun, wikiMigrationRun } from './lib/wiki-migration';
 import {
   completeWorkRefreshStage,
@@ -279,6 +286,38 @@ function assertNoReviewerIdentity(body: any) {
   }
 }
 
+function operationalAutoApplyGate(body: any): OperationalAutoApplyGate {
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+    || !body.gate || typeof body.gate !== 'object' || Array.isArray(body.gate)) {
+    throw new WorkDbError('운영 자동반영 요청과 gate는 객체여야 합니다.', 400, 'WIKI_AUTO_APPLY_GATE_INVALID');
+  }
+  const forbidden = ['reviewer', 'actor', 'actorId', 'authenticated', 'authenticationMethod', 'writersStopped'];
+  if (forbidden.some((key) => Object.prototype.hasOwnProperty.call(body, key)
+    || Object.prototype.hasOwnProperty.call(body.gate, key))) {
+    throw new WorkDbError(
+      '검토자 신원과 작성기 중지 상태는 요청 본문에서 지정할 수 없습니다.',
+      400,
+      'WIKI_AUTO_APPLY_IDENTITY_FORBIDDEN',
+    );
+  }
+  const authorizationId = String(body.gate.authorizationId ?? '');
+  if (process.env.SSPAT_OPERATIONAL_WIKI_WRITERS_STOPPED !== authorizationId) {
+    throw new WorkDbError('서버가 확인한 작성기 중지 작업창이 없습니다.', 409, 'WIKI_AUTO_APPLY_GATE_WRITERS_ACTIVE');
+  }
+  return {
+    authorizationId,
+    confirmation: String(body.gate.confirmation ?? ''),
+    checkpoint: String(body.gate.checkpoint ?? ''),
+    checkpointManifestSha256: String(body.gate.checkpointManifestSha256 ?? ''),
+    restore: String(body.gate.restore ?? ''),
+    restoreReportSha256: String(body.gate.restoreReportSha256 ?? ''),
+    database: String(body.gate.database ?? ''),
+    vault: String(body.gate.vault ?? ''),
+    idempotencyKey: String(body.gate.idempotencyKey ?? ''),
+    writersStopped: true,
+  };
+}
+
 function validateInput(body: any) {
   const projectName = typeof body?.projectName === 'string' ? body.projectName.trim() : '';
   const rawCases = Array.isArray(body?.ptCaseNumbers)
@@ -391,6 +430,9 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
   const wikiMarkdownScanIssuesRoute = pathname.match(/^\/api\/wiki-markdown\/scans\/([^/]+)\/issues$/);
   const wikiReviewDocumentRoute = pathname.match(/^\/api\/wiki-review\/documents\/([^/]+)$/);
   const wikiReviewDocumentApprovalRoute = pathname.match(/^\/api\/wiki-review\/documents\/([^/]+)\/approvals$/);
+  const wikiAutoApplyProposalRoute = pathname.match(/^\/api\/wiki-auto-apply\/proposals\/([^/]+)\/apply$/);
+  const wikiAutoApplyOperationRoute = pathname.match(/^\/api\/wiki-auto-apply\/operations\/([^/]+)$/);
+  const wikiAutoApplyRecoveryRoute = pathname.match(/^\/api\/wiki-auto-apply\/operations\/([^/]+)\/recover$/);
   const wikiMigrationRoute = pathname.match(/^\/api\/wiki-migrations\/([^/]+)$/);
   const matterRoute = pathname.match(/^\/api\/matters\/([^/]+)$/);
   const matterChildRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(work-items|notes|actions)$/);
@@ -443,9 +485,11 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     || pathname === '/api/wiki-markdown/scans'
     || pathname === '/api/wiki-markdown/proposals'
     || pathname === '/api/wiki-review'
+    || pathname === '/api/wiki-auto-apply/approvals'
     || pathname === '/api/wiki-migrations/legacy-dry-runs'
     || Boolean(wikiRoute || wikiReviewRoute || wikiEvidenceRoute)
     || Boolean(wikiMarkdownDocumentRoute || wikiMarkdownProposalPrepareRoute || wikiMarkdownProposalRoute || wikiMarkdownProposalActionRoute || wikiMarkdownScanIssuesRoute || wikiReviewDocumentRoute || wikiReviewDocumentApprovalRoute || wikiMigrationRoute)
+    || Boolean(wikiAutoApplyProposalRoute || wikiAutoApplyOperationRoute || wikiAutoApplyRecoveryRoute)
     || Boolean(workRefreshRoute || workRefreshStageCreateRoute || workRefreshStageRoute || workRefreshResultRoute || workRefreshFinalizeRoute)
     || Boolean(downloadNoticeRoute || downloadNoticeRecheckRoute || downloadNoticePreviewRoute || downloadNoticeProjectRoute || downloadNoticeProjectLinkRoute || downloadJobEventsRoute || downloadJobResumeRoute)
     || Boolean(responseProjectRoute || responseReconcileRoute || responseStageRoute || responseApprovalRoute || responseTaskRoute)
@@ -502,6 +546,47 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     if (req.method === 'GET' && pathname === '/api/wiki') return { status: 200, payload: { entities: wikiIndex(requestUrl.searchParams.get('q') || '') } };
     if (req.method === 'GET' && pathname === '/api/wiki-markdown') return { status: 200, payload: wikiMarkdownIndex() };
     if (req.method === 'GET' && pathname === '/api/wiki-review') return { status: 200, payload: await wikiReviewIndex() };
+    if (req.method === 'POST' && pathname === '/api/wiki-auto-apply/approvals') {
+      const reviewer = trustedWikiReviewer();
+      if (!reviewer) throw new WorkDbError('신뢰된 서버 검토자 세션이 필요합니다.', 403, 'WIKI_AUTO_APPLY_REVIEWER_INVALID');
+      const body = await readBody(req, 16 * 1024);
+      const gate = operationalAutoApplyGate(body);
+      if (typeof body.proposalId !== 'string' || !Number.isInteger(body.expectedProposalVersion)) {
+        throw new WorkDbError('proposalId와 expectedProposalVersion이 필요합니다.', 400, 'WIKI_AUTO_APPLY_REQUEST_INVALID');
+      }
+      const result = await approveWikiAutoApply(body.proposalId, body.expectedProposalVersion, reviewer.actorId, {
+        operationalGate: gate,
+        reviewerContext: reviewer,
+      });
+      return { status: result.duplicate ? 200 : 201, payload: result };
+    }
+    if (req.method === 'POST' && wikiAutoApplyProposalRoute) {
+      const reviewer = trustedWikiReviewer();
+      if (!reviewer) throw new WorkDbError('신뢰된 서버 검토자 세션이 필요합니다.', 403, 'WIKI_AUTO_APPLY_REVIEWER_INVALID');
+      const body = await readBody(req, 16 * 1024);
+      const gate = operationalAutoApplyGate(body);
+      const result = await executeWikiAutoApply(decodeURIComponent(wikiAutoApplyProposalRoute[1]), {
+        confirmation: body.confirmation,
+        operationalGate: gate,
+        reviewerContext: reviewer,
+      });
+      return { status: result.duplicate ? 200 : 201, payload: result };
+    }
+    if (req.method === 'POST' && wikiAutoApplyRecoveryRoute) {
+      const reviewer = trustedWikiReviewer();
+      if (!reviewer) throw new WorkDbError('신뢰된 서버 검토자 세션이 필요합니다.', 403, 'WIKI_AUTO_APPLY_REVIEWER_INVALID');
+      const body = await readBody(req, 16 * 1024);
+      const gate = operationalAutoApplyGate(body);
+      const result = await recoverWikiAutoApply(decodeURIComponent(wikiAutoApplyRecoveryRoute[1]), {
+        operationalGate: gate,
+        reviewerContext: reviewer,
+      });
+      return { status: 200, payload: result };
+    }
+    if (req.method === 'GET' && wikiAutoApplyOperationRoute && !wikiAutoApplyRecoveryRoute) {
+      if (!trustedWikiReviewer()) throw new WorkDbError('신뢰된 서버 검토자 세션이 필요합니다.', 403, 'WIKI_AUTO_APPLY_REVIEWER_INVALID');
+      return { status: 200, payload: wikiAutoApplyStatus(decodeURIComponent(wikiAutoApplyOperationRoute[1])) };
+    }
     if (req.method === 'GET' && wikiReviewDocumentApprovalRoute) {
       const docId = decodeURIComponent(wikiReviewDocumentApprovalRoute[1]);
       try {

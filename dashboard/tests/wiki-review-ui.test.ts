@@ -8,6 +8,7 @@ import {
   type ApprovalAction,
   type ReviewStateInput,
 } from '../app/wiki/review-model';
+import { wikiOperationView } from '../app/wiki/operation-model';
 
 const hash = 'a'.repeat(64);
 const otherHash = 'b'.repeat(64);
@@ -53,6 +54,24 @@ assert.match(approvalBlockReason({ ...base, status: 'evidence_stale' }, action) 
 assert.equal(matchesReviewFilter('approved', 'review'), true);
 assert.equal(matchesReviewFilter('conflict', 'issues'), true);
 assert.equal(matchesReviewFilter('up_to_date', 'review'), false);
+
+const reviewedProposal = {
+  id: 'proposal-1', status: 'reviewed', baseByteHash: hash, targetByteHash: otherHash,
+  evidenceSnapshotHash: 'd'.repeat(64),
+  evidence: [{ validationStatus: 'valid' }],
+  reviews: [{ action: 'accept_for_manual_apply', reviewedBaseByteHash: hash, reviewedEvidenceSnapshotHash: 'd'.repeat(64) }],
+};
+assert.equal(wikiOperationView(reviewedProposal, hash)?.state, 'ApprovalReady');
+assert.equal(wikiOperationView({ ...reviewedProposal, autoApproval: {
+  reviewedBaseByteHash: hash, reviewedTargetByteHash: otherHash, reviewedEvidenceSnapshotHash: 'd'.repeat(64),
+} }, hash)?.state, 'AutoApproved');
+assert.equal(wikiOperationView({ ...reviewedProposal, applyOperation: {
+  id: 'operation-1', status: 'file_applied', attemptCount: 1,
+} }, hash)?.state, 'Recoverable');
+assert.equal(wikiOperationView({ ...reviewedProposal, applyOperation: {
+  id: 'operation-2', status: 'conflict', errorCode: 'WIKI_AUTO_APPLY_BASE_CONFLICT',
+} }, hash)?.state, 'Conflict');
+assert.equal(wikiOperationView({ ...reviewedProposal, status: 'stale_evidence' }, hash)?.state, 'Stale');
 
 function response(status: number, payload: unknown) {
   return { status, ok: status >= 200 && status < 300, json: async () => payload };

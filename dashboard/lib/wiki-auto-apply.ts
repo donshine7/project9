@@ -16,7 +16,12 @@ import { pathIsInside, resolveWikiVaultPath, runtimeProfile } from './runtime-en
 import { parseWikiMarkdown, readWikiMarkdownSource, scanWikiMarkdownVault } from './wiki-markdown';
 import { reconcileWikiMarkdownProposal, wikiProposalEvidenceSnapshot } from './wiki-proposal';
 import { transaction, withDatabase, WorkDbError } from './work-db';
-import { verifyOperationalAutoApplyGate, type OperationalAutoApplyGate, type VerifiedOperationalAutoApplyGate } from './wiki-auto-apply-gate';
+import {
+  verifyOperationalAutoApplyGate,
+  verifyOperationalVaultMatchesCheckpoint,
+  type OperationalAutoApplyGate,
+  type VerifiedOperationalAutoApplyGate,
+} from './wiki-auto-apply-gate';
 import type { AuthenticatedWikiReviewer } from './wiki-document-approval';
 
 type Row = Record<string, any>;
@@ -62,6 +67,7 @@ export async function approveWikiAutoApply(proposalId: string, expectedProposalV
     const manualReview = db.prepare(`SELECT * FROM wiki_proposal_review WHERE proposal_id=? AND action='accept_for_manual_apply' ORDER BY created_at DESC,id DESC LIMIT 1`).get(proposalId) as Row | undefined;
     check(manualReview && manualReview.reviewed_base_byte_hash === proposal.base_byte_hash && manualReview.reviewed_evidence_snapshot_hash === proposal.evidence_snapshot_hash, '현재 hash에 결합된 사람 검토가 필요합니다.', 409, 'WIKI_AUTO_APPLY_REVIEW_REQUIRED');
     if (verified) {
+      verifyOperationalVaultMatchesCheckpoint(verified);
       const document = db.prepare('SELECT * FROM wiki_document WHERE doc_id=?').get(proposal.doc_id) as Row | undefined;
       check(document?.parse_status === 'valid' && document.byte_hash === proposal.base_byte_hash
         && document.current_revision_id === proposal.base_revision_id,
@@ -241,6 +247,7 @@ async function finalizeOperation(operationId: string) {
 async function applyPreparedOperation(operationId: string, state: Row, source: Awaited<ReturnType<typeof readWikiMarkdownSource>>, bytes: Buffer, options: Pick<ApplyOptions, 'faultAfterFileApplied' | 'beforeReplace'> = {}, verified?: VerifiedOperationalAutoApplyGate) {
   const temporary = path.join(path.dirname(source.absolutePath), `.${path.basename(source.absolutePath)}.${operationId}.tmp`);
   try {
+    if (verified) verifyOperationalVaultMatchesCheckpoint(verified);
     check(!existsSync(temporary), '기존 자동 반영 임시파일이 있습니다.', 409, 'WIKI_AUTO_APPLY_TEMP_EXISTS');
     durableTemporaryWrite(temporary, bytes);
     options.beforeReplace?.();
@@ -343,6 +350,10 @@ export async function recoverWikiAutoApply(operationId: string, options: Pick<Ap
   const state = proposalState(operation.proposal_id);
   const source = await readWikiMarkdownSource(operation.doc_id);
   if (verified) {
+    verifyOperationalVaultMatchesCheckpoint(verified, [
+      String(operation.relative_path),
+      String(source.revision?.history_object_path ?? ''),
+    ]);
     check(operation.status === 'prepared' || operation.status === 'file_applied' || operation.status === 'indexed',
       '이 상태는 자동 복구할 수 없습니다.', 409, 'WIKI_AUTO_APPLY_MANUAL_RECOVERY_REQUIRED');
     withDatabase((db) => transaction(db, () => {
@@ -350,6 +361,9 @@ export async function recoverWikiAutoApply(operationId: string, options: Pick<Ap
       const document = db.prepare('SELECT * FROM wiki_document WHERE doc_id=?').get(operation.doc_id) as Row | undefined;
       const mode = db.prepare('SELECT source_mode FROM wiki_document_source_mode WHERE doc_id=?').get(operation.doc_id) as Row | undefined;
       const approval = db.prepare('SELECT * FROM wiki_auto_apply_approval WHERE id=?').get(operation.approval_id) as Row | undefined;
+      const revision = document?.current_revision_id
+        ? db.prepare('SELECT * FROM wiki_markdown_revision WHERE id=? AND doc_id=?').get(document.current_revision_id, operation.doc_id) as Row | undefined
+        : undefined;
       check(proposal?.row_version === operation.approved_row_version
         && proposal?.evidence_snapshot_hash === operation.approved_evidence_snapshot_hash
         && proposal?.base_byte_hash === operation.base_byte_hash
@@ -366,6 +380,14 @@ export async function recoverWikiAutoApply(operationId: string, options: Pick<Ap
       const evidence = wikiProposalEvidenceSnapshot(db, document!.entity_type, document!.entity_id);
       check(evidence.records.length > 0 && evidence.snapshotHash === operation.approved_evidence_snapshot_hash,
         '복구 전 근거가 변경되었습니다.', 409, 'WIKI_AUTO_APPLY_RECOVERY_STALE');
+      if (source.byteHash === operation.target_byte_hash && !source.indexStale) {
+        const historyPath = path.resolve(resolveWikiVaultPath(), ...String(revision?.history_object_path ?? '').split('/'));
+        check(revision?.byte_hash === operation.target_byte_hash
+          && pathIsInside(resolveWikiVaultPath(), historyPath)
+          && existsSync(historyPath)
+          && sha256(readFileSync(historyPath)) === operation.target_byte_hash,
+        '복구 대상 revision 이력이 target hash와 다릅니다.', 409, 'WIKI_AUTO_APPLY_RECOVERY_STALE');
+      }
       check(path.resolve(resolveWikiVaultPath(), ...String(operation.relative_path).split('/')) === source.absolutePath
         && [operation.base_byte_hash, operation.target_byte_hash].includes(source.byteHash),
       '복구 파일의 경로 또는 hash가 base/target과 다릅니다.', 409, 'WIKI_AUTO_APPLY_RECOVERY_CONFLICT');

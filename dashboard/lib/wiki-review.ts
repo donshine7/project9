@@ -284,6 +284,21 @@ function latestProposalDetail(db: DatabaseSync, docId: string) {
       WHERE proposal_id=?
       ORDER BY created_at DESC,id DESC
     `).all(proposal.id),
+    autoApproval: db.prepare(`
+      SELECT id,reviewer,reviewed_base_byte_hash AS reviewedBaseByteHash,
+             reviewed_target_byte_hash AS reviewedTargetByteHash,
+             reviewed_evidence_snapshot_hash AS reviewedEvidenceSnapshotHash,
+             approval_event_id AS approvalEventId,created_at AS createdAt
+      FROM wiki_auto_apply_approval WHERE proposal_id=?
+    `).get(proposal.id) ?? null,
+    applyOperation: db.prepare(`
+      SELECT id,status,base_byte_hash AS baseByteHash,target_byte_hash AS targetByteHash,
+             attempt_count AS attemptCount,error_code AS errorCode,authorization_id AS authorizationId,
+             checkpoint_manifest_sha256 AS checkpointManifestSha256,
+             restore_report_sha256 AS restoreReportSha256,idempotency_key AS idempotencyKey,
+             created_at AS createdAt,updated_at AS updatedAt,completed_at AS completedAt
+      FROM wiki_apply_operation WHERE proposal_id=?
+    `).get(proposal.id) ?? null,
   };
 }
 

@@ -17,7 +17,7 @@
 | Tab | `18:16` | `dashboard/app/wiki/components.tsx#Tab` | `active`, children |
 | DocumentListItem | `19:23` | `dashboard/app/wiki/components.tsx#DocumentListItem` | `active`, `warning`, `documentTitle`, `meta`, `status` |
 | 문서 검토 패널 | 별도 Figma 승인 프레임 없음 | `dashboard/app/wiki/review-panels.tsx#ReviewStatePanel` | 문서 승인·AI 제안 검토를 9개 표시 상태로 구분 |
-| WikiOperationStateCard | `32:47` | BUILD-E 이후 구현 예정 (`dashboard/app/wiki` 기능 전용) | 자동반영·복구·배치 `State` 9종, `Reason`, `Next action`; 문서 검토 상태와 별개 |
+| WikiOperationStateCard | `32:47` | `dashboard/app/wiki/review-panels.tsx#WikiOperationStateCard`, `operation-model.ts` | 자동반영·복구 `State`, `Reason`, `Next action`; 문서 검토 상태와 별개. 배치 준비도는 별도 패널 계약 유지 |
 
 화면 구현은 `dashboard/app/wiki/page.tsx`, 집계 API는 `dashboard/lib/wiki-review.ts`, 로컬 HTTP 라우팅은 `dashboard/local-api.ts`에 있다.
 

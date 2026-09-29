@@ -8,6 +8,7 @@ import {
   type ReviewStateInput,
 } from './review-model';
 import styles from './review-panels.module.css';
+import type { WikiOperationView } from './operation-model';
 
 function shortHash(value?: string | null) {
   return value ? `sha256:${value.slice(0, 8)}…${value.slice(-4)}` : '없음';
@@ -86,6 +87,24 @@ export function WorkStateBoundary() {
     <section className={styles.boundary} aria-label="문서와 업무 상태 구분">
       <h3>업무 상태는 별도 기록</h3>
       <p>문서 승인과 AI 제안 검토는 Wiki 이력입니다. 사건의 업무종류, 단계, 현재상태, Action은 이 화면의 승인으로 변경되지 않습니다.</p>
+    </section>
+  );
+}
+
+export function WikiOperationStateCard({ view }: { view: WikiOperationView }) {
+  return (
+    <section
+      className={`${styles.operation} ${styles[`operation_${view.tone}`]}`}
+      aria-label="Wiki 자동 반영 작업 상태"
+      data-operation-state={view.state}
+    >
+      <div className={styles.stateHeading}>
+        <span className={styles.status}>{view.label}</span>
+        <h3>자동 반영 작업</h3>
+      </div>
+      <p><strong>이유</strong> · {view.reason}</p>
+      <p><strong>다음 행동</strong> · {view.nextAction}</p>
+      <p className={styles.audit}>문서 검토 상태와 별도 축으로 기록됩니다.</p>
     </section>
   );
 }

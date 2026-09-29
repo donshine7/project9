@@ -27,12 +27,16 @@ export type VerifiedOperationalAutoApplyGate = {
   restoreReportSha256: string;
   idempotencyKey: string;
   reviewerContextJson: string;
+  checkpointVaultFiles: Array<{ path: string; sha256: string; bytes: number }>;
+  checkpointVaultTreeSha256: string;
 };
 
 const sha256 = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 const normalized = (value: string) => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
 const hashPattern = /^[0-9a-f]{64}$/;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,199}$/;
+
+type VaultFileRecord = { path: string; sha256: string; bytes: number };
 
 function requireGate(value: unknown, code: string): asserts value {
   if (!value) throw new WorkDbError(code, 409, code);
@@ -50,6 +54,60 @@ function physical(file: string, directory: boolean) {
 
 function overlaps(left: string, right: string) {
   return pathIsInside(left, right) || pathIsInside(right, left);
+}
+
+function vaultFiles(root: string) {
+  const found: VaultFileRecord[] = [];
+  const visit = (directory: string) => {
+    for (const name of readdirSync(directory).sort()) {
+      if (directory === root && name === '.git') continue;
+      const child = path.join(directory, name);
+      const stat = lstatSync(child);
+      requireGate(!stat.isSymbolicLink(), 'WIKI_AUTO_APPLY_GATE_VAULT_CHANGED');
+      if (stat.isDirectory()) visit(child);
+      else {
+        requireGate(stat.isFile(), 'WIKI_AUTO_APPLY_GATE_VAULT_CHANGED');
+        const bytes = readFileSync(child);
+        found.push({
+          path: path.relative(root, child).split(path.sep).join('/'),
+          sha256: sha256(bytes),
+          bytes: bytes.length,
+        });
+      }
+    }
+  };
+  visit(root);
+  return found;
+}
+
+function vaultTreeHash(records: VaultFileRecord[]) {
+  return sha256(records.map((item) => `${item.path}\0${item.sha256}\0${item.bytes}`).join('\n'));
+}
+
+export function verifyOperationalVaultMatchesCheckpoint(
+  verified: VerifiedOperationalAutoApplyGate,
+  allowedChangedPaths?: string | string[],
+) {
+  const vault = physical(resolveWikiVaultPath(), true);
+  const current = vaultFiles(vault);
+  const expected = verified.checkpointVaultFiles;
+  const allowed = new Set((Array.isArray(allowedChangedPaths) ? allowedChangedPaths : [allowedChangedPaths])
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.split(path.sep).join('/')));
+  const beforeByPath = new Map(expected.map((item) => [item.path, item]));
+  const afterByPath = new Map(current.map((item) => [item.path, item]));
+  for (const filePath of new Set([...beforeByPath.keys(), ...afterByPath.keys()])) {
+    if (allowed.has(filePath)) continue;
+    const before = beforeByPath.get(filePath);
+    const after = afterByPath.get(filePath);
+    requireGate(Boolean(before && after && before.sha256 === after.sha256 && before.bytes === after.bytes),
+      'WIKI_AUTO_APPLY_GATE_VAULT_CHANGED');
+  }
+  if (!allowed.size) {
+    requireGate(vaultTreeHash(current) === verified.checkpointVaultTreeSha256,
+      'WIKI_AUTO_APPLY_GATE_VAULT_CHANGED');
+  }
+  return { vault, files: current };
 }
 
 export function verifyOperationalAutoApplyGate(
@@ -90,6 +148,7 @@ export function verifyOperationalAutoApplyGate(
   const manifestHash = sha256(readFileSync(manifestFile));
   requireGate(manifestHash === gate.checkpointManifestSha256
     && verified.manifest.profile === 'operational'
+    && verified.manifest.operationId === gate.authorizationId
     && verified.manifest.sources.databasePathSha256 === sha256(normalized(database))
     && verified.manifest.sources.vaultPathSha256 === sha256(normalized(vault))
     && verified.manifest.coordination.writersQuiescenceRequired === true,
@@ -97,6 +156,8 @@ export function verifyOperationalAutoApplyGate(
   const reportFile = physical(path.join(restore, 'restore-report.json'), false);
   requireGate(sha256(readFileSync(reportFile)) === gate.restoreReportSha256, 'WIKI_AUTO_APPLY_GATE_RESTORE_HASH');
   const report = JSON.parse(readFileSync(reportFile, 'utf8')) as Record<string, any>;
+  const checkpointCreatedAt = Date.parse(String(verified.manifest.createdAt ?? ''));
+  const restoreCompletedAt = Date.parse(String(report.completedAt ?? ''));
   requireGate(report.schema === 'sspat-operational-restore-rehearsal-v1'
     && report.operationId === verified.manifest.operationId
     && report.checkpointManifestSha256 === manifestHash
@@ -104,6 +165,10 @@ export function verifyOperationalAutoApplyGate(
     && report.restoredVaultTreeSha256 === verified.manifest.vault.treeSha256
     && report.restoredGitHead === verified.manifest.git.head
     && report.productionModified === false
+    && Number.isFinite(checkpointCreatedAt)
+    && Number.isFinite(restoreCompletedAt)
+    && restoreCompletedAt >= checkpointCreatedAt
+    && checkpointCreatedAt <= Date.now() + 5 * 60 * 1000
     && JSON.stringify(report.verification) === JSON.stringify(verified.manifest.database.verification),
   'WIKI_AUTO_APPLY_GATE_RESTORE_INVALID');
   const restoredDatabase = physical(path.join(restore, 'db', 'work.db'), false);
@@ -141,5 +206,7 @@ export function verifyOperationalAutoApplyGate(
     restoreReportSha256: gate.restoreReportSha256,
     idempotencyKey: gate.idempotencyKey,
     reviewerContextJson: JSON.stringify({ actorId: reviewer.actorId, authenticationMethod: reviewer.authenticationMethod }),
+    checkpointVaultFiles: verified.manifest.vault.files as VaultFileRecord[],
+    checkpointVaultTreeSha256: String(verified.manifest.vault.treeSha256),
   };
 }

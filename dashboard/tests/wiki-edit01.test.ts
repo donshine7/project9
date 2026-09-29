@@ -4,9 +4,11 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { bindAnalysis } from '../lib/analysis';
+import { localApiMiddleware } from '../local-api';
 import { approveWikiAutoApply, executeWikiAutoApply, recoverWikiAutoApply, wikiAutoApplyStatus } from '../lib/wiki-auto-apply';
-import { scanWikiMarkdownVault } from '../lib/wiki-markdown';
+import { readWikiMarkdownSource, scanWikiMarkdownVault } from '../lib/wiki-markdown';
 import {
   ingestWikiMarkdownProposal,
   prepareWikiMarkdownProposal,
@@ -18,7 +20,7 @@ import {
 import { withDatabase } from '../lib/work-db';
 import { createOperationalCheckpoint, rehearseOperationalRestore } from '../lib/operational-checkpoint';
 import { operationalDatabasePath } from '../lib/runtime-environment';
-import { verifyOperationalAutoApplyGate } from '../lib/wiki-auto-apply-gate';
+import { verifyOperationalAutoApplyGate, verifyOperationalVaultMatchesCheckpoint } from '../lib/wiki-auto-apply-gate';
 
 const root = mkdtempSync(path.join(os.tmpdir(), 'sspat-wiki-edit01-'));
 const vault = path.join(root, 'vault');
@@ -39,6 +41,23 @@ process.env.SSPAT_SPEC_PROJECT_ROOT = path.join(root, 'spec');
 process.env.SSPAT_PROVISIONAL_PROJECT_ROOT = path.join(root, 'provisional');
 process.env.SSPAT_PROJECT_ROOT = projectRoot;
 process.chdir(path.join(projectRoot, 'dashboard'));
+
+async function apiRequest(method: string, url: string, body?: unknown) {
+  const bytes = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
+  const req = Readable.from(bytes) as Readable & { method: string; url: string; headers: Record<string, string> };
+  req.method = method;
+  req.url = url;
+  req.headers = {
+    host: '127.0.0.1:4173', origin: 'http://127.0.0.1:4173',
+    ...(body === undefined ? {} : { 'content-type': 'application/json', 'content-length': String(bytes[0].length) }),
+  };
+  let responseBody = '';
+  const res = { statusCode: 0, setHeader() {}, end(value?: string) { responseBody = value ?? ''; } };
+  let nextCalled = false;
+  await localApiMiddleware()(req, res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false, `${method} ${url} was not handled`);
+  return { status: res.statusCode, body: JSON.parse(responseBody) as any };
+}
 
 function markdown(body: string) {
   return `---\nschema_version: wiki-md-v1\ndoc_id: ${docId}\ndocument_type: entity_wiki\nentity_type: matter\nentity_id: ${matterId}\ntitle: P260701-KR EDIT-01 합성 사건\ntags: [eval, edit01]\n---\n# P260701-KR\n\n${body}\n`;
@@ -125,8 +144,8 @@ async function main() {
     mkdirSync(restoreParent);
     assert.notEqual(path.resolve(database).toLowerCase(), path.resolve(operationalDatabasePath()).toLowerCase());
     const checkpoint = createOperationalCheckpoint({
-      operationId: 'synthetic-checkpoint-001', profile: 'operational',
-      confirmation: 'CHECKPOINT:synthetic-checkpoint-001', database, vault, checkpointParent,
+      operationId: 'synthetic-auth-001', profile: 'operational',
+      confirmation: 'CHECKPOINT:synthetic-auth-001', database, vault, checkpointParent,
     });
     const restore = rehearseOperationalRestore({ checkpoint: checkpoint.checkpoint, restoreParent, restoreName: 'synthetic-restore-001' });
     const fileHash = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -142,6 +161,8 @@ async function main() {
     process.env.SSPAT_OPERATIONAL_WIKI_WRITERS_STOPPED = gate.authorizationId;
     process.env.SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_DATABASE = database;
     process.env.SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_VAULT = vault;
+    process.env.SSPAT_AUTHENTICATED_REVIEWER = '장진태';
+    process.env.SSPAT_REVIEWER_AUTH_METHOD = reviewerContext.authenticationMethod;
     assert.throws(() => verifyOperationalAutoApplyGate({ ...gate, database: path.join(root, 'wrong.db') }, reviewerContext),
       (error: any) => error?.code === 'WIKI_AUTO_APPLY_GATE_PATH_MISSING');
     assert.throws(() => verifyOperationalAutoApplyGate({ ...gate, checkpoint: vault }, reviewerContext),
@@ -158,28 +179,59 @@ async function main() {
     await assert.rejects(() => approveWikiAutoApply(operational.id, operational.detail.proposal.row_version, '장진태',
       { operationalGate: { ...gate, restoreReportSha256: '0'.repeat(64) }, reviewerContext }),
     (error: any) => error?.code === 'WIKI_AUTO_APPLY_GATE_RESTORE_HASH');
-    await approveWikiAutoApply(operational.id, operational.detail.proposal.row_version, '장진태', { operationalGate: gate, reviewerContext });
+    const approvalResponse = await apiRequest('POST', '/api/wiki-auto-apply/approvals', {
+      proposalId: operational.id,
+      expectedProposalVersion: operational.detail.proposal.row_version,
+      gate: { ...gate, writersStopped: undefined },
+    });
+    assert.equal(approvalResponse.status, 201);
     await assert.rejects(() => executeWikiAutoApply(operational.id, {
       confirmation: 'APPLY', operationalGate: gate, reviewerContext, beforeReplace: () => {},
     }), (error: any) => error?.code === 'WIKI_AUTO_APPLY_TEST_HOOK_BLOCKED');
-    const result: any = await executeWikiAutoApply(operational.id, { confirmation: 'APPLY', operationalGate: gate, reviewerContext });
+    const applyResponse = await apiRequest('POST', `/api/wiki-auto-apply/proposals/${encodeURIComponent(operational.id)}/apply`, {
+      confirmation: 'APPLY',
+      gate: { ...gate, writersStopped: undefined },
+    });
+    assert.equal(applyResponse.status, 201);
+    const result: any = applyResponse.body;
     assert.equal(result.operation.status, 'succeeded');
     assert.equal(result.operation.authorization_id, gate.authorizationId);
     assert.equal(result.operation.checkpoint_manifest_sha256, checkpoint.manifestSha256);
     assert.equal(result.operation.restore_report_sha256, gate.restoreReportSha256);
     assert.equal(result.operation.idempotency_key, gate.idempotencyKey);
     assert.match(readFileSync(matterFile, 'utf8'), /합성 운영 게이트가 허용한 문장/);
+    const appliedSource = await readWikiMarkdownSource(docId);
+    verifyOperationalVaultMatchesCheckpoint(verifyOperationalAutoApplyGate(gate, reviewerContext), [
+      result.operation.relative_path,
+      String(appliedSource.revision?.history_object_path ?? ''),
+    ]);
+    const statusResponse = await apiRequest('GET', `/api/wiki-auto-apply/operations/${encodeURIComponent(result.operation.id)}`);
+    assert.equal(statusResponse.status, 200);
+    assert.equal(statusResponse.body.operation.status, 'succeeded');
     assert.equal((await executeWikiAutoApply(operational.id, { confirmation: 'APPLY', operationalGate: gate, reviewerContext }) as any).duplicate, true);
     await assert.rejects(() => recoverWikiAutoApply(result.operation.id, {
       operationalGate: { ...gate, authorizationId: 'synthetic-auth-002', confirmation: 'AUTO_APPLY:synthetic-auth-002' }, reviewerContext,
     }), (error: any) => error?.code === 'WIKI_AUTO_APPLY_GATE_AUTHORIZATION_REQUIRED');
     process.env.SSPAT_RUNTIME_PROFILE = 'test';
     const humanEdited = await reviewedProposal('이 제안은 사람 편집으로 차단됩니다.');
+    const secondCheckpoint = createOperationalCheckpoint({
+      operationId: 'synthetic-auth-002', profile: 'operational',
+      confirmation: 'CHECKPOINT:synthetic-auth-002', database, vault, checkpointParent,
+    });
+    const secondRestore = rehearseOperationalRestore({ checkpoint: secondCheckpoint.checkpoint, restoreParent, restoreName: 'synthetic-restore-002' });
+    const secondGate = {
+      authorizationId: 'synthetic-auth-002', confirmation: 'AUTO_APPLY:synthetic-auth-002',
+      checkpoint: secondCheckpoint.checkpoint, checkpointManifestSha256: secondCheckpoint.manifestSha256,
+      restore: secondRestore.restore, restoreReportSha256: fileHash(path.join(secondRestore.restore, 'restore-report.json')),
+      database, vault, idempotencyKey: 'synthetic-idempotency-002', writersStopped: true as const,
+    };
     process.env.SSPAT_RUNTIME_PROFILE = 'operational';
-    await approveWikiAutoApply(humanEdited.id, humanEdited.detail.proposal.row_version, '장진태', { operationalGate: gate, reviewerContext });
+    process.env.SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_AUTHORIZATION = secondGate.confirmation;
+    process.env.SSPAT_OPERATIONAL_WIKI_WRITERS_STOPPED = secondGate.authorizationId;
+    await approveWikiAutoApply(humanEdited.id, humanEdited.detail.proposal.row_version, '장진태', { operationalGate: secondGate, reviewerContext });
     writeFileSync(matterFile, markdown('사람이 동시에 편집한 합성 본문입니다.'), 'utf8');
-    await assert.rejects(() => executeWikiAutoApply(humanEdited.id, { confirmation: 'APPLY', operationalGate: gate, reviewerContext }),
-      (error: any) => error?.code === 'WIKI_AUTO_APPLY_STALE');
+    await assert.rejects(() => executeWikiAutoApply(humanEdited.id, { confirmation: 'APPLY', operationalGate: secondGate, reviewerContext }),
+      (error: any) => ['WIKI_AUTO_APPLY_STALE', 'WIKI_AUTO_APPLY_GATE_VAULT_CHANGED'].includes(error?.code));
     assert.match(readFileSync(matterFile, 'utf8'), /사람이 동시에 편집한 합성 본문/);
     process.env.SSPAT_RUNTIME_PROFILE = 'test';
 

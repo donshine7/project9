@@ -77,8 +77,23 @@ function seedLegacySources(results: Row[]) {
           .run(publicationEvent, document.entity_type, document.entity_id, 'wiki.publish', JSON.stringify({ synthetic: true }), timestamp);
         db.prepare(`INSERT INTO entity_wiki_revision(id,entity_type,entity_id,version,run_id,sections_json,change_summary,input_hash,publication_event_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
           .run(revisionId, document.entity_type, document.entity_id, 1, runId, JSON.stringify(sections), 'Stage 6 합성 legacy 본문', sha256(result.docId), publicationEvent, timestamp);
-        db.prepare(`INSERT INTO wiki_document_source_mode(doc_id,source_mode,legacy_entity_type,legacy_entity_id,changed_at) VALUES (?,'legacy_db',?,?,?)`)
-          .run(result.docId, document.entity_type, document.entity_id, timestamp);
+        // The vertical runner already indexes each synthetic Markdown file. New entity
+        // documents are therefore initialized as markdown source before this Stage 6
+        // fixture adds a legacy revision. Convert that existing row instead of assuming
+        // the source-mode row is absent.
+        db.prepare(`
+          INSERT INTO wiki_document_source_mode(
+            doc_id,source_mode,legacy_entity_type,legacy_entity_id,
+            migration_item_id,changed_by_event_id,changed_at
+          ) VALUES (?,'legacy_db',?,?,NULL,NULL,?)
+          ON CONFLICT(doc_id) DO UPDATE SET
+            source_mode='legacy_db',
+            legacy_entity_type=excluded.legacy_entity_type,
+            legacy_entity_id=excluded.legacy_entity_id,
+            migration_item_id=NULL,
+            changed_by_event_id=NULL,
+            changed_at=excluded.changed_at
+        `).run(result.docId, document.entity_type, document.entity_id, timestamp);
       }
       db.exec('COMMIT');
     } catch (error) {

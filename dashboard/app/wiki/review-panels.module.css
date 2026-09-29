@@ -1,6 +1,6 @@
-.state, .approval, .boundary { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-.state h3, .approval h3, .boundary h3 { margin: 0; font-size: 14px; }
-.state p, .approval p, .boundary p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.6; }
+.state, .approval, .boundary, .operation { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.state h3, .approval h3, .boundary h3, .operation h3 { margin: 0; font-size: 14px; }
+.state p, .approval p, .boundary p, .operation p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.6; }
 .stateHeading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .status { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: var(--radius-full); background: var(--paper); font-size: 11px; font-weight: 800; }
 .hashes { display: grid; gap: 7px; margin: 0; }
@@ -20,4 +20,10 @@
 .confirmation { display: flex; align-items: flex-start; gap: 9px; font-size: 11px; font-weight: 700; line-height: 1.5; }
 .confirmation input { margin-top: 2px; accent-color: var(--violet); }
 .boundary { border-color: var(--info-border); background: var(--blue-soft); }
+.operation_reviewed { border-color: var(--violet); background: var(--violet-soft); }
+.operation_success { border-color: var(--positive-border); background: var(--mint-soft); }
+.operation_danger { border-color: var(--danger); background: var(--danger-soft); }
+.operation_info { border-color: var(--info-border); background: var(--blue-soft); }
+.operation_warning { border-color: var(--amber); background: var(--amber-soft); }
+.operation .audit { font-weight: 700; }
 @media (max-width: 560px) { .approval > button { width: 100%; } }

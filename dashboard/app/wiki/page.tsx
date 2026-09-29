@@ -10,7 +10,8 @@ import {
   Tab,
 } from './components';
 import { wikiApprovalAdapter } from './review-adapter';
-import { DocumentApprovalPanel, ReviewStatePanel, WorkStateBoundary } from './review-panels';
+import { wikiOperationView } from './operation-model';
+import { DocumentApprovalPanel, ReviewStatePanel, WikiOperationStateCard, WorkStateBoundary } from './review-panels';
 import { displayStatus, displayStatusMeta, matchesReviewFilter, type ApprovalAction, type DocumentApproval, type ReviewStateInput } from './review-model';
 
 type Row = Record<string, any>;
@@ -194,6 +195,7 @@ export default function WikiPage() {
   const reviewInput = detail
     ? reviewState(detail.item, detail.proposal?.status, detail.proposal?.updatedAt, detail.recovery?.status)
     : null;
+  const operationView = detail ? wikiOperationView(detail.proposal, detail.item.currentByteHash) : null;
 
   return (
     <div className="wiki-review-shell">
@@ -302,6 +304,7 @@ export default function WikiPage() {
               </section>
 
               {reviewInput && <ReviewStatePanel input={reviewInput} />}
+              {operationView && <WikiOperationStateCard view={operationView} />}
               <WorkStateBoundary />
               {reviewInput && (
                 <DocumentApprovalPanel
