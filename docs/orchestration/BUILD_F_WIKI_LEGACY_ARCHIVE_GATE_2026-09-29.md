@@ -28,17 +28,18 @@
 
 ## ORCH 통합 계약
 
-공용 `dashboard/local-api.ts`, package/lock, UI·CSS는 BUILD-F에서 수정하지 않았다. ORCH가 상태를 표시한다면 `wiki_legacy_archive_run`의 `status`를 **삭제 가능 여부로 해석하지 말고** `manifest_hash`, `source_snapshot_hash`, `blocked_count`, `output_root` 및 항목별 `blockers_json`을 읽기 전용으로 제공한다. 외부 버튼이나 API에서 삭제 동작을 연결하지 않는다.
+공용 `dashboard/local-api.ts`, lock, UI·CSS는 BUILD-F에서 수정하지 않았다. 최종 통합에서 검증·CLI용 npm script만 추가했다. ORCH가 상태를 표시한다면 `wiki_legacy_archive_run`의 `status`를 **삭제 가능 여부로 해석하지 말고** `manifest_hash`, `source_snapshot_hash`, `blocked_count`, `output_root` 및 항목별 `blockers_json`을 읽기 전용으로 제공한다. 외부 버튼이나 API에서 삭제 동작을 연결하지 않는다.
 
 ## 합성 검증
 
 `dashboard/tests/wiki-legacy-archive.test.ts`는 OS temp에만 DB·Vault·컷오버 manifest·복구 보고서를 만들고, 정상 봉인·멱등 검증, 원본 본문/source mode 비변경, draft·과거 본문 차단, archive 변조·snapshot 변경·부분 실패, 경로 겹침·symlink, 운영 프로필·삭제 차단을 확인한다. 실제 운영 DB 또는 Vault는 열지 않았다.
 
-`dashboard`에서 다음 명령으로 실행한다. package/lock 파일은 ORCH 소유이므로 BUILD-F 전용 npm script는 추가하지 않았다.
+`dashboard`에서 다음 명령으로 실행한다.
 
 ```powershell
-npx tsc tests/wiki-legacy-archive.test.ts scripts/wiki-legacy-archive-cli.ts lib/wiki-legacy-archive.ts --outDir ../.wiki-legacy-archive-test --rootDir . --module commonjs --moduleResolution node --target ES2022 --skipLibCheck --esModuleInterop
-node ../.wiki-legacy-archive-test/tests/wiki-legacy-archive.test.js
+npm run test:wiki-legacy-archive
+npm run wiki:legacy-archive -- dry-run <OS-temp-하위-output-root>
+npm run wiki:legacy-archive -- verify <기존-output-root>
 ```
 
 2026-09-29 재검수 결과: 위 합성 테스트, `npm run lint`, `npm run typecheck`, `npm run test:phase1`~`test:phase4`, `npm run test:wiki-stage6`, `npm run test:wiki-cleanup01`, `npm run build`, `git diff --check` 모두 통과했다. lint에는 기존 `Inspect-MatterAssignmentEvidence.cjs`의 미사용 escape 경고 1건만 남았다. 검증은 temp 합성 DB·Vault에서 수행했으며 운영 DB·실제 Vault 접근과 삭제는 없었다.

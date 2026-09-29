@@ -16,6 +16,9 @@
 .wiki-stage6-test/
 .wiki-operational-cutover-test/
 .wiki-operational-cutover/
+.wiki-cutover-fixture-test/
+.wiki-auto-apply-api-test/
+.wiki-review-ui-test/
 .wiki-stage7-test/
 .wiki-eval-scale/
 .wiki-edit01-test/
