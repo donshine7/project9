@@ -1,0 +1,23 @@
+.state, .approval, .boundary { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.state h3, .approval h3, .boundary h3 { margin: 0; font-size: 14px; }
+.state p, .approval p, .boundary p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.6; }
+.stateHeading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.status { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: var(--radius-full); background: var(--paper); font-size: 11px; font-weight: 800; }
+.hashes { display: grid; gap: 7px; margin: 0; }
+.hashes div { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; font-size: 10px; }
+.hashes dt { color: var(--ink-soft); }
+.hashes dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 700; }
+.state .audit { font-weight: 700; }
+.approved { border-color: var(--violet); background: var(--violet-soft); }
+.proposal_reviewed { border-color: var(--info-border); background: var(--blue-soft); }
+.needs_review, .duplicate_id { border-color: var(--amber); background: var(--amber-soft); }
+.evidence_stale, .missing, .conflict { border-color: var(--danger); background: var(--danger-soft); }
+.recovering { border-color: var(--info-border); background: var(--blue-soft); }
+.up_to_date { border-color: var(--positive-border); background: var(--mint-soft); }
+.approval { border-color: var(--violet); }
+.approval > button { justify-self: start; }
+.blockReason { padding: 10px 12px; border-radius: var(--radius-md); background: var(--paper); }
+.confirmation { display: flex; align-items: flex-start; gap: 9px; font-size: 11px; font-weight: 700; line-height: 1.5; }
+.confirmation input { margin-top: 2px; accent-color: var(--violet); }
+.boundary { border-color: var(--info-border); background: var(--blue-soft); }
+@media (max-width: 560px) { .approval > button { width: 100%; } }

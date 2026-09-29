@@ -59,6 +59,7 @@ export function DocumentListItem({
   documentTitle,
   meta,
   status,
+  statusLabel,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   active?: boolean;
@@ -66,6 +67,7 @@ export function DocumentListItem({
   documentTitle: string;
   meta: string;
   status?: ReviewStatus;
+  statusLabel?: string;
 }) {
   return (
     <button
@@ -77,7 +79,7 @@ export function DocumentListItem({
       <span className="wiki-review-document-type">WIKI DOCUMENT</span>
       <span className="wiki-review-document-title">{documentTitle}</span>
       <span className="wiki-review-document-meta">{meta}</span>
-      {status && <StatusBadge status={status} />}
+      {status && <StatusBadge status={status} label={statusLabel} />}
     </button>
   );
 }

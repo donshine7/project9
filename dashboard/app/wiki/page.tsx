@@ -9,6 +9,9 @@ import {
   StatusBadge,
   Tab,
 } from './components';
+import { wikiApprovalAdapter } from './review-adapter';
+import { DocumentApprovalPanel, ReviewStatePanel, WorkStateBoundary } from './review-panels';
+import { displayStatus, displayStatusMeta, matchesReviewFilter, type ApprovalAction, type DocumentApproval, type ReviewStateInput } from './review-model';
 
 type Row = Record<string, any>;
 type ReviewDocument = {
@@ -26,6 +29,7 @@ type ReviewDocument = {
   statusLabel: string;
   updatedAt: string;
   latestProposal?: Row | null;
+  documentApproval?: DocumentApproval | null;
 };
 
 type ReviewIndex = {
@@ -40,6 +44,7 @@ type ReviewDetail = {
   database: Row | null;
   proposal: Row | null;
   latestScan: Row | null;
+  recovery?: { status: string } | null;
 };
 
 async function request(url: string, options?: RequestInit) {
@@ -71,7 +76,7 @@ function proposalStatusLabel(status?: string) {
   const labels: Record<string, string> = {
     prepared: '파일 작성 준비',
     ready_for_review: '검토 대기',
-    reviewed: '수동 반영 승인',
+    reviewed: '수동 반영 검토 완료',
     rejected: '반려',
     stale_document: '문서 변경',
     stale_evidence: '근거 변경',
@@ -81,10 +86,25 @@ function proposalStatusLabel(status?: string) {
   return status ? labels[status] ?? status : '제안 없음';
 }
 
+function reviewState(document: ReviewDocument, proposalStatus?: string | null, proposalUpdatedAt?: string | null, recoveryStatus?: string | null): ReviewStateInput {
+  return {
+    status: document.status,
+    currentByteHash: document.currentByteHash,
+    indexedByteHash: document.indexedByteHash,
+    indexStale: document.indexStale,
+    parseStatus: document.parseStatus,
+    documentApproval: document.documentApproval,
+    proposalStatus,
+    proposalUpdatedAt,
+    recoveryStatus,
+  };
+}
+
 export default function WikiPage() {
   const [index, setIndex] = useState<ReviewIndex>({ documents: [], latestScan: null, counts: {} });
   const [selected, setSelected] = useState('');
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
+  const [approvalAction, setApprovalAction] = useState<ApprovalAction | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'review' | 'issues'>('all');
   const [busy, setBusy] = useState(false);
@@ -98,7 +118,6 @@ export default function WikiPage() {
 
   const loadDetail = useCallback(async (docId: string) => {
     const data = await request(`/api/wiki-review/documents/${encodeURIComponent(docId)}`) as ReviewDetail;
-    setDetail(data);
     return data;
   }, []);
 
@@ -115,7 +134,14 @@ export default function WikiPage() {
     }
     let cancelled = false;
     setDetail(null);
-    loadDetail(selected)
+    setApprovalAction(null);
+    Promise.all([loadDetail(selected), wikiApprovalAdapter.preflight(selected)])
+      .then(([document, action]) => {
+        if (!cancelled) {
+          setDetail(document);
+          setApprovalAction(action);
+        }
+      })
       .catch((error) => {
         if (!cancelled) setNotice(error instanceof Error ? error.message : 'Wiki 문서를 불러오지 못했습니다.');
       });
@@ -129,9 +155,9 @@ export default function WikiPage() {
         || document.title.toLocaleLowerCase('ko-KR').includes(normalized)
         || document.docId.toLocaleLowerCase('ko-KR').includes(normalized)
         || document.relativePath.toLocaleLowerCase('ko-KR').includes(normalized);
-      const matchesFilter = filter === 'all'
-        || (filter === 'review' && ['needs_review', 'evidence_stale', 'reviewed'].includes(document.status))
-        || (filter === 'issues' && ['missing', 'duplicate_id', 'conflict'].includes(document.status));
+      const matchesFilter = matchesReviewFilter(
+        displayStatus(reviewState(document, document.latestProposal?.status, document.latestProposal?.updatedAt)), filter,
+      );
       return matchesQuery && matchesFilter;
     });
   }, [filter, index.documents, query]);
@@ -142,10 +168,21 @@ export default function WikiPage() {
     try {
       await action();
       const documents = await loadIndex();
-      if (selected && documents.some((document) => document.docId === selected)) await loadDetail(selected);
+      if (selected && documents.some((document) => document.docId === selected)) {
+        const [document, approval] = await Promise.all([loadDetail(selected), wikiApprovalAdapter.preflight(selected)]);
+        setDetail(document);
+        setApprovalAction(approval);
+      }
       setNotice(success);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : '작업을 완료하지 못했습니다.');
+      if (selected) {
+        try {
+          const [document, approval] = await Promise.all([loadDetail(selected), wikiApprovalAdapter.preflight(selected)]);
+          setDetail(document);
+          setApprovalAction(approval);
+        } catch { /* Preserve the action error. */ }
+      }
     } finally {
       setBusy(false);
     }
@@ -154,6 +191,9 @@ export default function WikiPage() {
   const proposal = detail?.proposal;
   const database = detail?.database;
   const source = detail?.source;
+  const reviewInput = detail
+    ? reviewState(detail.item, detail.proposal?.status, detail.proposal?.updatedAt, detail.recovery?.status)
+    : null;
 
   return (
     <div className="wiki-review-shell">
@@ -202,17 +242,21 @@ export default function WikiPage() {
           </div>
 
           <div className="wiki-review-document-list">
-            {filtered.map((document) => (
-              <DocumentListItem
-                key={document.docId}
-                active={document.docId === selected}
-                warning={['missing', 'duplicate_id', 'conflict', 'evidence_stale'].includes(document.status)}
-                documentTitle={document.title}
-                meta={document.relativePath}
-                status={document.status}
-                onClick={() => setSelected(document.docId)}
-              />
-            ))}
+            {filtered.map((document) => {
+              const status = displayStatus(reviewState(document, document.latestProposal?.status, document.latestProposal?.updatedAt));
+              return (
+                <DocumentListItem
+                  key={document.docId}
+                  active={document.docId === selected}
+                  warning={['missing', 'duplicate_id', 'conflict', 'evidence_stale'].includes(status)}
+                  documentTitle={document.title}
+                  meta={document.relativePath}
+                  status={document.status}
+                  statusLabel={displayStatusMeta[status].label}
+                  onClick={() => setSelected(document.docId)}
+                />
+              );
+            })}
             {!filtered.length && (
               <p className="wiki-review-empty">
                 조건에 맞는 문서가 없습니다. Vault를 색인하거나 필터를 변경하세요.
@@ -231,12 +275,7 @@ export default function WikiPage() {
                   <h2>{detail.item.title}</h2>
                   <p>{detail.item.relativePath} · {detail.item.entityType ?? detail.item.documentType}</p>
                 </div>
-                <StatusBadge status={detail.item.status} />
-              </div>
-
-              <div className="wiki-review-source-tabs" aria-label="원본 구분">
-                <Tab active>Markdown 최신 파일</Tab>
-                <Tab active={false}>DB 현재 상태</Tab>
+                <StatusBadge status={detail.item.status} label={reviewInput ? displayStatusMeta[displayStatus(reviewInput)].label : undefined} />
               </div>
 
               <section className="wiki-review-comparison" aria-label="Markdown과 DB 비교">
@@ -262,23 +301,26 @@ export default function WikiPage() {
                 </article>
               </section>
 
-              <section className={`wiki-review-state-card is-${detail.item.status}`}>
-                <div>
-                  <h3>검토 상태 · {detail.item.statusLabel}</h3>
-                  <p>
-                    검토 기준 {shortHash(proposal?.reviewedBaseByteHash)}
-                    <span aria-hidden="true"> → </span>
-                    현재 {shortHash(detail.item.currentByteHash)}
-                  </p>
-                </div>
-                <StatusBadge status={detail.item.status} />
-              </section>
+              {reviewInput && <ReviewStatePanel input={reviewInput} />}
+              <WorkStateBoundary />
+              {reviewInput && (
+                <DocumentApprovalPanel
+                  key={`${detail.item.docId}:${detail.item.currentByteHash}:${approvalAction?.expectedEvidenceSnapshotHash}:${approvalAction?.code}`}
+                  input={reviewInput}
+                  action={approvalAction}
+                  busy={busy}
+                  onApprove={(action) => perform(
+                    () => wikiApprovalAdapter.approve(detail.item.docId, action),
+                    '현재 Markdown 원문 승인 상태를 확인했습니다. 업무 상태는 변경되지 않았습니다.',
+                  )}
+                />
+              )}
 
               <section className="wiki-review-proposal">
                 <div className="wiki-review-section-heading">
                   <div>
                     <h3>변경 제안</h3>
-                    <p>AI 제안은 활성 Markdown에 자동 적용되지 않습니다.</p>
+                    <p>AI 제안 검토는 문서 원문 승인 및 업무 상태 변경과 별도입니다.</p>
                   </div>
                   <span className="wiki-review-proposal-status">{proposalStatusLabel(proposal?.status)}</span>
                 </div>
@@ -348,7 +390,7 @@ export default function WikiPage() {
                         '수동 반영 대상으로 승인했습니다. 활성 Markdown은 변경되지 않았습니다.',
                       )}
                     >
-                      검토 기록
+                      AI 제안 수동 반영 검토
                     </Button>
                   </>
                 )}
@@ -406,7 +448,7 @@ export default function WikiPage() {
 
           <section className="wiki-review-human-gate">
             <h3>Human gate</h3>
-            <p>AI는 제안과 근거 검증만 수행합니다. 최종 Markdown 반영은 사람이 Obsidian에서 수행합니다.</p>
+            <p>AI 제안 검토만으로 Markdown 원문은 승인되지 않고, 사건의 업무 단계와 Action도 변경되지 않습니다.</p>
           </section>
         </aside>
       </main>

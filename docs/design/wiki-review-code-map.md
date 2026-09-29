@@ -46,3 +46,7 @@
 - `17:34` → `dashboard/app/wiki/components.tsx` / `StatusBadge`
 - `18:16` → `dashboard/app/wiki/components.tsx` / `Tab`
 - `19:23` → `dashboard/app/wiki/components.tsx` / `DocumentListItem`
+
+## 2026-09-29 승인·충돌 검토 확장
+
+기존 Figma 화면의 8개 API 상태는 유지하고, `review-model.ts`가 문서 승인 이력과 AI 제안 검토 이력을 구분하는 9개 표시 상태로 변환한다. `review-panels.tsx`의 `ReviewStatePanel`, `DocumentApprovalPanel`, `WorkStateBoundary`는 화면에 추가된 기능별 컴포넌트이며 스타일은 `review-panels.module.css`에 한정한다. 이 확장에 대한 Figma 화면 갱신·승인 기록은 아직 없으므로 기존 `23:2`를 새 상태의 승인 디자인으로 간주하지 않는다. 데이터·API 연결 조건은 `docs/orchestration/BUILD_B_WIKI_REVIEW_UI_HANDOFF_2026-09-29.md`를 따른다.
