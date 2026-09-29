@@ -14,12 +14,12 @@
 
 ## 봉인 및 검증
 
-- `dashboard/lib/wiki-legacy-archive.ts`의 `runWikiLegacyArchiveDryRun(outputRoot)`은 `test`·`eval`·`development` 프로필에서 **OS temp 내부의 격리 루트**만 허용한다. DB·Vault·출력은 모두 그 루트 안에 있어야 하고 출력과 DB/Vault는 겹칠 수 없다. 부모 경로의 symlink/junction을 차단한다.
+- `dashboard/lib/wiki-legacy-archive.ts`의 `runWikiLegacyArchiveDryRun(outputRoot)`은 `test`·`eval`·`development` 프로필에서 **OS temp 내부의 격리 루트**만 허용한다. DB·Vault·출력·staging·컷오버 bundle·복구 root의 모든 조합은 서로 포함되거나 같을 수 없다. 부모 경로의 symlink/junction도 차단한다.
 - DB 외래키를 점검하고, 모든 legacy 본문 원본 행을 복사한다. 파일명에는 ID의 SHA-256을 사용하여 임의 ID가 경로가 될 수 없게 한다. 본문 hash, archive 파일 hash, 근거 hash를 manifest와 SQLite 원장에 기록한다.
-- 각 `entity_wiki_revision`은 **그 revision ID를 직접 지목하는 정확히 하나의 컷오버 항목**만 인정한다. 문서의 현재 revision·byte hash·Vault 파일, `source_mode=markdown`과 source-change 이벤트, 컷오버 승인 유형 및 실행 감사, 컷오버 manifest와 성공한 복구 보고서의 ID·hash·대상 연결을 검사한다. 다른 revision의 컷오버 성공은 재사용하지 않는다.
+- 각 `entity_wiki_revision`은 **그 revision ID를 직접 지목하는 정확히 하나의 컷오버 항목**만 인정한다. 문서의 현재 revision·byte hash·Vault 파일, `source_mode=markdown`과 source-change 이벤트, 컷오버 승인 유형 및 실행 감사, 컷오버 manifest와 성공한 복구 보고서의 ID·hash·대상 연결을 검사한다. proposal 승인 경로는 검토 이벤트의 `source_type`·`correlation_id`와 proposal/base/target/evidence hash, `automaticApply=false`까지 현재 문서 revision과 대조한다. 다른 revision이나 다른 target의 승인은 재사용하지 않는다.
 - 컷오버 manifest와 복구 보고서는 OS temp 내부의 실제 파일이어야 한다. archive 출력은 컷오버 묶음·복구 사본과도 겹칠 수 없다. archive 항목에 두 파일의 hash를 보존하므로 이후 변경은 재검증에서 감지된다.
 - 원본과 근거의 snapshot hash를 파일 봉인 전후에 비교한다. DB 원장은 파일 검증 뒤에 기록하며, 파일 또는 원장만 남은 부분 결과와 기존 staging은 차단한다. 재실행은 현재 원본 snapshot, manifest, 각 archive 파일, 파일 목록, 원장 항목을 다시 대조한 경우에만 멱등 결과를 돌려준다.
-- migration `023_wiki_legacy_archive_gate.sql`의 트리거는 archive 원장 행의 UPDATE/DELETE를 거부한다. 파일 자체의 불변성은 SHA-256 검증과 재검증 절차로 확인한다.
+- migration `023_wiki_legacy_archive_gate.sql`의 트리거는 archive 원장 행의 UPDATE/DELETE를 거부한다. 후속 migration `024_wiki_legacy_archive_immutability.sql`은 선언된 revision·historic revision·draft 합계가 채워진 run에 item 사후 INSERT를 거부한다. 파일 자체의 불변성은 SHA-256 검증과 재검증 절차로 확인한다.
 - `verifyWikiLegacyArchive(outputRoot)`는 이미 봉인된 결과만 검증한다. CLI 명령은 `dry-run`과 `verify`만 제공한다. `deleteWikiLegacyBodies()`는 항상 `WIKI_ARCHIVE_DELETION_UNSUPPORTED` 오류를 낸다.
 
 ## 정리 전 계속 필요한 조건
@@ -32,7 +32,7 @@
 
 ## 합성 검증
 
-`dashboard/tests/wiki-legacy-archive.test.ts`는 OS temp에만 DB·Vault·컷오버 manifest·복구 보고서를 만들고, 정상 봉인·멱등 검증, 원본 본문/source mode 비변경, draft·과거 본문 차단, archive 변조·snapshot 변경·부분 실패, 경로 겹침·symlink, 운영 프로필·삭제 차단을 확인한다. 실제 운영 DB 또는 Vault는 열지 않았다.
+`dashboard/tests/wiki-legacy-archive.test.ts`는 OS temp에만 DB·Vault·컷오버 manifest·복구 보고서를 만들고, document/proposal 승인 경로의 정상 봉인과 target·correlation·automaticApply 변조 차단, 멱등 검증, 원본 본문/source mode 비변경, draft·과거 본문 차단, archive 변조·snapshot 변경·부분 실패, 모든 물리 root의 상호 겹침·symlink, 봉인 후 item append, 운영 프로필·삭제 차단을 확인한다. 실제 운영 DB 또는 Vault는 열지 않았다.
 
 `dashboard`에서 다음 명령으로 실행한다.
 
