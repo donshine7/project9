@@ -101,6 +101,8 @@ function run() {
     errorCode(() => deleteWikiLegacyBodies(), 'WIKI_ARCHIVE_DELETION_UNSUPPORTED');
     errorCode(() => runWikiLegacyArchiveDryRun(path.join(root, 'db', 'bad')), 'WIKI_ARCHIVE_PATH_BLOCKED');
     errorCode(() => runWikiLegacyArchiveDryRun(path.join(vault, 'bad')), 'WIKI_ARCHIVE_PATH_BLOCKED');
+    errorCode(() => runWikiLegacyArchiveDryRun(path.join(bundle, 'bad')), 'WIKI_ARCHIVE_PATH_BLOCKED');
+    errorCode(() => runWikiLegacyArchiveDryRun(path.join(restore, 'bad')), 'WIKI_ARCHIVE_PATH_BLOCKED');
     mkdirSync(path.join(root, 'unrecorded'));
     errorCode(() => runWikiLegacyArchiveDryRun(path.join(root, 'unrecorded')), 'WIKI_ARCHIVE_PARTIAL_BLOCKED');
     process.env.SSPAT_RUNTIME_PROFILE = 'operational';
@@ -109,6 +111,12 @@ function run() {
     let symlinkCreated = false;
     try { symlinkSync(bundle, path.join(root, 'linked-bundle'), 'junction'); symlinkCreated = true; } catch { /* Windows symlink privilege may be absent. */ }
     if (symlinkCreated) errorCode(() => runWikiLegacyArchiveDryRun(path.join(root, 'linked-bundle', 'archive')), 'WIKI_ARCHIVE_PATH_BLOCKED');
+    try {
+      symlinkSync(path.join(root, 'missing-target'), path.join(root, 'broken-link'), 'junction');
+      errorCode(() => runWikiLegacyArchiveDryRun(path.join(root, 'broken-link')), 'WIKI_ARCHIVE_PATH_BLOCKED');
+    } catch (error) {
+      if (!['EPERM', 'EACCES', 'ENOENT'].includes((error as any)?.code)) throw error;
+    }
     const archivedFile = path.join(readyRoot, ...ready.manifest.items[0].archiveRelativePath.split('/'));
     writeFileSync(archivedFile, 'tampered');
     errorCode(() => runWikiLegacyArchiveDryRun(readyRoot), 'WIKI_ARCHIVE_EXISTING_MISMATCH');

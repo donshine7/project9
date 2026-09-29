@@ -25,6 +25,13 @@ function check(ok: unknown, code: string, message: string): asserts ok { if (!ok
 const json = (value: unknown): Row | null => { try { return JSON.parse(String(value ?? 'null')) as Row; } catch { return null; } };
 const rowBy = (rows: Row[], key: string, value: unknown) => rows.find((row) => row[key] === value);
 const rowsBy = (rows: Row[], key: string, value: unknown) => rows.filter((row) => row[key] === value);
+function statIfPresent(target: string) {
+  try { return lstatSync(target); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
 const tables = [
   'entity_wiki_revision', 'wiki_revision', 'wiki_draft', 'decision_run', 'event', 'user_feedback',
   'wiki_document', 'wiki_document_source_mode', 'wiki_markdown_revision',
@@ -35,8 +42,8 @@ const tables = [
 function noLinkAncestors(target: string) {
   let cursor = path.resolve(target);
   while (true) {
-    if (existsSync(cursor)) {
-      const stat = lstatSync(cursor);
+    const stat = statIfPresent(cursor);
+    if (stat) {
       check(!stat.isSymbolicLink(), 'WIKI_ARCHIVE_PATH_BLOCKED', `심볼릭 링크 또는 junction 경로: ${cursor}`);
       const actual = realpathSync(cursor);
       const comparable = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value;
@@ -51,7 +58,7 @@ function noLinkAncestors(target: string) {
 function physicalFile(root: string, relative: string): string | null {
   if (!relative || path.isAbsolute(relative) || relative.includes('\\') || relative.split('/').some((part) => !part || part === '.' || part === '..')) return null;
   const file = path.resolve(root, ...relative.split('/'));
-  if (!pathIsInside(root, file) || !existsSync(file)) return null;
+  if (!pathIsInside(root, file) || !statIfPresent(file)) return null;
   noLinkAncestors(file);
   return lstatSync(file).isFile() ? file : null;
 }
@@ -204,8 +211,18 @@ function revisionEvidence(source: Record<string, Row[]>, revision: Row, vault: s
   } };
 }
 
-function plan(db: DatabaseSync, vault: string) {
+function plan(db: DatabaseSync, vault: string, outputRoot: string) {
   const source = snapshot(db);
+  const overlaps = (a: string, b: string) => pathIsInside(a, b) || pathIsInside(b, a);
+  for (const sourcePath of [
+    ...source.wiki_cutover_run.map((row) => row.bundle_path),
+    ...source.wiki_recovery_rehearsal.map((row) => row.restore_root),
+  ]) {
+    if (typeof sourcePath !== 'string' || !sourcePath.trim()) continue;
+    const resolved = path.resolve(sourcePath);
+    check(!overlaps(outputRoot, resolved) && !overlaps(`${outputRoot}.staging`, resolved),
+      'WIKI_ARCHIVE_PATH_BLOCKED', 'archive 출력이 컷오버 묶음 또는 복구 사본과 겹칩니다.');
+  }
   const entries: Array<{ item: ArchiveItem; bytes: Buffer }> = [];
   for (const revision of source.entity_wiki_revision) {
     const { blockers, evidence } = revisionEvidence(source, revision, vault);
@@ -296,7 +313,7 @@ export function runWikiLegacyArchiveDryRun(outputRootInput: string, options: { f
   return withDatabase((db) => {
     db.exec('BEGIN IMMEDIATE');
     try {
-      const current = plan(db, vault);
+      const current = plan(db, vault, outputRoot);
       if (existsSync(outputRoot) || db.prepare('SELECT id FROM wiki_legacy_archive_run WHERE output_root=?').get(outputRoot)) {
         const result = verifySealed(db, outputRoot, current);
         db.exec('COMMIT');
@@ -325,7 +342,7 @@ export function runWikiLegacyArchiveDryRun(outputRootInput: string, options: { f
       }
       const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
       writeFileSync(path.join(staging, 'archive-manifest.json'), manifestBytes, { flag: 'wx' });
-      check(plan(db, vault).sourceSnapshotHash === current.sourceSnapshotHash, 'WIKI_ARCHIVE_SOURCE_CHANGED', '봉인 중 원본 또는 근거가 변경되었습니다.');
+      check(plan(db, vault, outputRoot).sourceSnapshotHash === current.sourceSnapshotHash, 'WIKI_ARCHIVE_SOURCE_CHANGED', '봉인 중 원본 또는 근거가 변경되었습니다.');
       for (const entry of current.entries) {
         const file = physicalFile(staging, entry.item.archiveRelativePath);
         check(file && sha256(readFileSync(file)) === entry.item.archiveHash, 'WIKI_ARCHIVE_HASH_MISMATCH', 'archive 파일 검증에 실패했습니다.');
@@ -348,7 +365,7 @@ export function runWikiLegacyArchiveDryRun(outputRootInput: string, options: { f
 export function verifyWikiLegacyArchive(outputRootInput: string) {
   const { outputRoot, vault } = environment(outputRootInput);
   check(!existsSync(`${outputRoot}.staging`), 'WIKI_ARCHIVE_PARTIAL_BLOCKED', 'archive staging이 남아 있습니다.');
-  return withDatabase((db) => verifySealed(db, outputRoot, plan(db, vault)));
+  return withDatabase((db) => verifySealed(db, outputRoot, plan(db, vault, outputRoot)));
 }
 
 export function deleteWikiLegacyBodies(): never {
