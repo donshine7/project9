@@ -49,6 +49,16 @@ function executionProfile(gate?: OperationalAutoApplyGate, reviewer?: Authentica
   return { profile, verified: verifyOperationalAutoApplyGate(gate, reviewer) };
 }
 
+function operationalAuditBinding(verified: VerifiedOperationalAutoApplyGate) {
+  return {
+    authorizationId: verified.authorizationId,
+    checkpointManifestSha256: verified.checkpointManifestSha256,
+    restoreReportSha256: verified.restoreReportSha256,
+    idempotencyKey: verified.idempotencyKey,
+    reviewerContextJson: verified.reviewerContextJson,
+  };
+}
+
 export async function approveWikiAutoApply(proposalId: string, expectedProposalVersion: number, reviewer = '장진태', operational?: Pick<ApplyOptions, 'operationalGate' | 'reviewerContext'>) {
   const { verified } = executionProfile(operational?.operationalGate, operational?.reviewerContext);
   identifier(proposalId, 'proposalId');
@@ -98,7 +108,7 @@ export async function approveWikiAutoApply(proposalId: string, expectedProposalV
     const approvalId = randomUUID();
     const eventId = randomUUID();
     db.prepare(`INSERT INTO event(id,entity_type,entity_id,event_type,after_json,actor,source_type,correlation_id,created_at) VALUES (?,?,?,?,?,?,'user_input',?,?)`)
-      .run(eventId, proposal.entity_type, proposal.entity_id, 'wiki.proposal_auto_apply_approved', JSON.stringify({ proposalId, baseByteHash: proposal.base_byte_hash, targetByteHash: proposal.target_byte_hash, evidenceSnapshotHash: proposal.evidence_snapshot_hash, rowVersion: proposal.row_version, automaticApply: true, operationalGate: verified ?? null }), reviewer, proposalId, timestamp);
+      .run(eventId, proposal.entity_type, proposal.entity_id, 'wiki.proposal_auto_apply_approved', JSON.stringify({ proposalId, baseByteHash: proposal.base_byte_hash, targetByteHash: proposal.target_byte_hash, evidenceSnapshotHash: proposal.evidence_snapshot_hash, rowVersion: proposal.row_version, automaticApply: true, operationalGate: verified ? operationalAuditBinding(verified) : null }), reviewer, proposalId, timestamp);
     db.prepare(`INSERT INTO wiki_auto_apply_approval(id,proposal_id,reviewer,reviewed_base_byte_hash,reviewed_target_byte_hash,reviewed_evidence_snapshot_hash,approval_event_id,created_at) VALUES (?,?,?,?,?,?,?,?)`)
       .run(approvalId, proposalId, reviewer, proposal.base_byte_hash, proposal.target_byte_hash, proposal.evidence_snapshot_hash, eventId, timestamp);
     return { approval: db.prepare('SELECT * FROM wiki_auto_apply_approval WHERE id=?').get(approvalId), duplicate: false };
@@ -150,8 +160,12 @@ function markOperation(operationId: string, status: string, values: { errorCode?
 
 function verifyOperationalApprovalEvent(db: import('node:sqlite').DatabaseSync, approval: Row, proposal: Row, verified: VerifiedOperationalAutoApplyGate) {
   const event = db.prepare('SELECT * FROM event WHERE id=?').get(approval.approval_event_id) as Row | undefined;
+  const document = db.prepare('SELECT entity_type,entity_id FROM wiki_document WHERE doc_id=?').get(proposal.doc_id) as Row | undefined;
   check(event?.event_type === 'wiki.proposal_auto_apply_approved' && event.actor === '장진태'
-    && event.source_type === 'user_input',
+    && event.source_type === 'user_input'
+    && event.entity_type === document?.entity_type
+    && event.entity_id === document?.entity_id
+    && event.correlation_id === proposal.id,
   '운영 별도 승인 이벤트가 없습니다.', 409, 'WIKI_AUTO_APPLY_APPROVAL_STALE');
   const payload = JSON.parse(String(event.after_json ?? 'null')) as Row | null;
   check(payload?.proposalId === proposal.id
@@ -159,8 +173,11 @@ function verifyOperationalApprovalEvent(db: import('node:sqlite').DatabaseSync, 
     && payload?.baseByteHash === proposal.base_byte_hash
     && payload?.targetByteHash === proposal.target_byte_hash
     && payload?.evidenceSnapshotHash === proposal.evidence_snapshot_hash
+    && payload?.automaticApply === true
+    && payload?.operationalGate?.authorizationId === verified.authorizationId
     && payload?.operationalGate?.checkpointManifestSha256 === verified.checkpointManifestSha256
     && payload?.operationalGate?.restoreReportSha256 === verified.restoreReportSha256
+    && payload?.operationalGate?.idempotencyKey === verified.idempotencyKey
     && payload?.operationalGate?.reviewerContextJson === verified.reviewerContextJson,
   '운영 별도 승인이 현재 제안·체크포인트와 다릅니다.', 409, 'WIKI_AUTO_APPLY_APPROVAL_STALE');
 }

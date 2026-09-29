@@ -60,6 +60,34 @@ function gitState(sourceRoot: string) {
   }
 }
 
+export function assertSyntheticMarkdownInitialization(
+  docId: string,
+  document: Row,
+  sourceMode: Row | undefined,
+  initializationEvent: Row | undefined,
+) {
+  let payload: Row | null = null;
+  try { payload = JSON.parse(String(initializationEvent?.after_json ?? 'null')) as Row | null; } catch { payload = null; }
+  if (!(sourceMode?.doc_id === docId
+    && sourceMode.source_mode === 'markdown'
+    && sourceMode.legacy_entity_type == null
+    && sourceMode.legacy_entity_id == null
+    && sourceMode.migration_item_id == null
+    && typeof sourceMode.changed_by_event_id === 'string'
+    && initializationEvent?.id === sourceMode.changed_by_event_id
+    && initializationEvent?.event_type === 'wiki.source_mode_initialized'
+    && initializationEvent?.entity_type === document.entity_type
+    && initializationEvent?.entity_id === document.entity_id
+    && initializationEvent?.actor === 'Wiki Markdown indexer'
+    && initializationEvent?.source_type === 'system'
+    && payload?.schema === 'wiki-source-mode-initialization-v1'
+    && payload?.docId === docId
+    && payload?.sourceMode === 'markdown'
+    && payload?.reason === 'new_document_without_legacy_source')) {
+    fail(`STAGE6_SOURCE_MODE_CONTRACT:${docId}`);
+  }
+}
+
 function seedLegacySources(results: Row[]) {
   withDatabase((db) => {
     db.exec('BEGIN IMMEDIATE');
@@ -77,23 +105,21 @@ function seedLegacySources(results: Row[]) {
           .run(publicationEvent, document.entity_type, document.entity_id, 'wiki.publish', JSON.stringify({ synthetic: true }), timestamp);
         db.prepare(`INSERT INTO entity_wiki_revision(id,entity_type,entity_id,version,run_id,sections_json,change_summary,input_hash,publication_event_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
           .run(revisionId, document.entity_type, document.entity_id, 1, runId, JSON.stringify(sections), 'Stage 6 합성 legacy 본문', sha256(result.docId), publicationEvent, timestamp);
-        // The vertical runner already indexes each synthetic Markdown file. New entity
-        // documents are therefore initialized as markdown source before this Stage 6
-        // fixture adds a legacy revision. Convert that existing row instead of assuming
-        // the source-mode row is absent.
-        db.prepare(`
-          INSERT INTO wiki_document_source_mode(
-            doc_id,source_mode,legacy_entity_type,legacy_entity_id,
-            migration_item_id,changed_by_event_id,changed_at
-          ) VALUES (?,'legacy_db',?,?,NULL,NULL,?)
-          ON CONFLICT(doc_id) DO UPDATE SET
-            source_mode='legacy_db',
-            legacy_entity_type=excluded.legacy_entity_type,
-            legacy_entity_id=excluded.legacy_entity_id,
-            migration_item_id=NULL,
-            changed_by_event_id=NULL,
-            changed_at=excluded.changed_at
-        `).run(result.docId, document.entity_type, document.entity_id, timestamp);
+        // The vertical runner already indexed this file and must have produced the
+        // canonical markdown initialization event. Validate that contract before this
+        // synthetic fixture changes the source to legacy; never normalize corruption.
+        const sourceMode = db.prepare('SELECT * FROM wiki_document_source_mode WHERE doc_id=?').get(result.docId) as Row | undefined;
+        const initializationEvent = sourceMode?.changed_by_event_id
+          ? db.prepare('SELECT * FROM event WHERE id=?').get(sourceMode.changed_by_event_id) as Row | undefined
+          : undefined;
+        assertSyntheticMarkdownInitialization(result.docId, document, sourceMode, initializationEvent);
+        const changed = db.prepare(`
+          UPDATE wiki_document_source_mode
+          SET source_mode='legacy_db',legacy_entity_type=?,legacy_entity_id=?,
+              migration_item_id=NULL,changed_by_event_id=NULL,changed_at=?
+          WHERE doc_id=? AND source_mode='markdown'
+        `).run(document.entity_type, document.entity_id, timestamp, result.docId);
+        if (changed.changes !== 1) fail(`STAGE6_SOURCE_MODE_TRANSITION:${result.docId}`);
       }
       db.exec('COMMIT');
     } catch (error) {
@@ -204,7 +230,9 @@ async function main() {
   process.stdout.write(`${JSON.stringify({ runRoot: cli.runRoot, manifest, results }, null, 2)}\n`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

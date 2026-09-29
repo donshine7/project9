@@ -11,7 +11,7 @@
 
 ## ORCH의 HTTP 연결 계약
 
-공용 `dashboard/local-api.ts`, `package.json`/lock, `app/globals.css`, 기존 page는 BUILD-E에서 수정하지 않았다. 다음 연결은 ORCH 소유다.
+초기 BUILD-E 분기에서는 공용 `dashboard/local-api.ts`, `package.json`, 기존 page를 수정하지 않았다. 이후 ORCH 통합에서 아래 HTTP 경계와 `/wiki`의 별도 자동반영 상태 카드를 연결했다. CSS는 Wiki 기능 전용 module에 한정했다.
 
 1. `POST /api/wiki-auto-apply/approvals`: body는 `{ proposalId, expectedProposalVersion, gate: { authorizationId, confirmation, checkpoint, checkpointManifestSha256, restore, restoreReportSha256, database, vault, idempotencyKey } }`. 서버는 인증 경계에서 `AuthenticatedWikiReviewer` (`actorId='장진태'`, `authenticated=true`, 실제 인증 방법)를 만들고 `writersStopped`를 신뢰된 작업창 상태에서만 부여한다. body와 `gate`의 `reviewer`, `actorId`, `authenticated`, `authenticationMethod`, `writersStopped`는 거부한다. 서버가 `approveWikiAutoApply(proposalId, expectedProposalVersion, reviewer.actorId, { operationalGate, reviewerContext: reviewer })`를 호출한다.
 2. `POST /api/wiki-auto-apply/proposals/:proposalId/apply`: 같은 `gate` 객체와 바깥 `confirmation: 'APPLY'`를 받아 `executeWikiAutoApply(proposalId, { confirmation: 'APPLY', operationalGate, reviewerContext })`를 호출한다. 운영 승인 ID/확인 문자열은 `gate.confirmation='AUTO_APPLY:<authorizationId>'`이며 서버 환경 `SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_AUTHORIZATION`과 일치해야 한다. 승인과 적용은 같은 checkpoint manifest·restore report·검토자 context에 결합된다.
@@ -20,7 +20,7 @@
 
 통합 구현은 체크포인트의 `operationId`와 `authorizationId`를 같게 요구하고, 승인·적용 직전에 현재 Vault 전체가 체크포인트의 파일 목록·tree hash와 일치하는지 재검증한다. 복구에서는 대상 문서 한 경로만 base/target 변경을 허용하고 나머지 Vault 파일은 체크포인트와 같아야 한다.
 
-게이트 서버 환경 변수는 `SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_AUTHORIZATION=AUTO_APPLY:<id>`, `SSPAT_OPERATIONAL_WIKI_WRITERS_STOPPED=<id>`, `SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_DATABASE=<절대 DB 경로>`, `SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_VAULT=<절대 Vault 경로>`다. `SSPAT_WORK_DB_PATH`와 `SSPAT_WIKI_VAULT_PATH`의 현재 해석 결과까지 각각 일치해야 한다. localhost 연결만으로는 인증되지 않는다. 새 HTTP 라우트와 Figma 9상태 UI 연결은 아직 없으며, 이 branch를 병합해도 버튼으로 운영 실행이 시작되지는 않는다.
+게이트 서버 환경 변수는 `SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_AUTHORIZATION=AUTO_APPLY:<id>`, `SSPAT_OPERATIONAL_WIKI_WRITERS_STOPPED=<id>`, `SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_DATABASE=<절대 DB 경로>`, `SSPAT_OPERATIONAL_WIKI_AUTO_APPLY_VAULT=<절대 Vault 경로>`다. `SSPAT_WORK_DB_PATH`와 `SSPAT_WIKI_VAULT_PATH`의 현재 해석 결과까지 각각 일치해야 한다. localhost 연결만으로는 인증되지 않는다. HTTP 라우트는 연결되었지만 `/wiki` 카드는 조회·상태 안내용이며 운영 승인·적용 버튼을 노출하지 않는다. 따라서 이 branch를 병합하는 것만으로 운영 자동반영이 시작되지는 않는다.
 
 Obsidian과 다른 외부 작성기는 이 코드의 SQLite 잠금을 따르지 않는다. 승인된 쓰기 중지 작업창은 실제로 중지·확인되어야 하며, 소프트웨어만으로 외부 작성기 중지를 증명하지 않는다. 체크포인트/복원 리허설을 실제 운영에서 만드는 작업도 이 변경에 포함되지 않는다.
 
@@ -33,4 +33,4 @@ Obsidian과 다른 외부 작성기는 이 코드의 SQLite 잠금을 따르지 
 
 BUILD-E 이전 통합 후보의 외부 Stage 6 러너에서 `wiki_document_source_mode.doc_id` 중복 삽입이 재현되었다. Vertical 러너의 최초 색인이 새 entity Wiki의 source mode를 이미 `markdown`으로 초기화한 뒤, cutover 러너 fixture가 행이 없다고 가정하고 `legacy_db` 행을 다시 `INSERT`한 것이 원인이었다. 운영 cutover 로직의 실패가 아니라 평가 fixture의 단계 간 계약 불일치였다.
 
-`wiki-eval-cutover-runner.ts`는 이제 동일 `doc_id`가 있으면 합성 legacy revision에 맞춰 명시적으로 `legacy_db`로 갱신한다. 새 OS temp 실행에서 4개 문서 cutover, legacy 쓰기 차단, bundle, 복원 리허설이 완료되었고 dev expected 채점 43/43을 통과했다. 이 수정은 합성 평가 DB에만 적용되며 운영 DB·Vault를 변경하지 않는다.
+`wiki-eval-cutover-runner.ts`는 이제 기존 행이 정확한 `wiki.source_mode_initialized` 이벤트와 엔터티에 결합된 정상 `markdown` 초기화 상태인지 먼저 검증한다. 누락·오기·잘못 연결된 행은 `STAGE6_SOURCE_MODE_CONTRACT`로 실패하며 덮어 고치지 않는다. 검증을 통과한 합성 행만 `legacy_db` fixture로 전환한다. 새 OS temp 실행에서 4개 문서 cutover, legacy 쓰기 차단, bundle, 복원 리허설이 완료되었고 dev expected 채점 43/43을 통과했다. 이 수정은 합성 평가 DB에만 적용되며 운영 DB·Vault를 변경하지 않는다.

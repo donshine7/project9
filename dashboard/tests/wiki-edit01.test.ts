@@ -185,6 +185,20 @@ async function main() {
       gate: { ...gate, writersStopped: undefined },
     });
     assert.equal(approvalResponse.status, 201);
+    const changedIdempotencyGate = { ...gate, idempotencyKey: 'synthetic-idempotency-changed' };
+    await assert.rejects(
+      () => approveWikiAutoApply(operational.id, operational.detail.proposal.row_version, '장진태', {
+        operationalGate: changedIdempotencyGate,
+        reviewerContext,
+      }),
+      (error: any) => error?.code === 'WIKI_AUTO_APPLY_APPROVAL_STALE',
+    );
+    await assert.rejects(
+      () => executeWikiAutoApply(operational.id, {
+        confirmation: 'APPLY', operationalGate: changedIdempotencyGate, reviewerContext,
+      }),
+      (error: any) => error?.code === 'WIKI_AUTO_APPLY_APPROVAL_STALE',
+    );
     await assert.rejects(() => executeWikiAutoApply(operational.id, {
       confirmation: 'APPLY', operationalGate: gate, reviewerContext, beforeReplace: () => {},
     }), (error: any) => error?.code === 'WIKI_AUTO_APPLY_TEST_HOOK_BLOCKED');
