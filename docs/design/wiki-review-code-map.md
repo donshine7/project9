@@ -4,6 +4,7 @@
 
 - Figma 파일: [Wiki Review UX](https://www.figma.com/design/Jza7Umf9gezhYcmleHJoAf)
 - 화면: `Wiki Review / Desktop` — node `23:2`
+- 운영 상태 확장: [Wiki 검토 운영 상태 · BUILD-B 핸드오프](wiki-operational-state-handoff.md) — 화면 흐름 `31:3`, 컴포넌트 세트 `32:47`
 - 합성 데이터만 사용한다.
 - CSS 원본은 `dashboard/app/globals.css`의 `:root` 변수다. Figma 변수의 WEB syntax도 같은 CSS 변수명을 사용한다.
 
@@ -15,6 +16,7 @@
 | StatusBadge | `17:34` | `dashboard/app/wiki/components.tsx#StatusBadge` | `status` 8종, 상태 라벨은 변형에서 결정 |
 | Tab | `18:16` | `dashboard/app/wiki/components.tsx#Tab` | `active`, children |
 | DocumentListItem | `19:23` | `dashboard/app/wiki/components.tsx#DocumentListItem` | `active`, `warning`, `documentTitle`, `meta`, `status` |
+| WikiOperationStateCard | `32:47` | BUILD-B 구현 예정 (`dashboard/app/wiki` 기능 전용) | `State` 9종, `Reason`, `Next action`; 문서 상태와 별개 |
 
 화면 구현은 `dashboard/app/wiki/page.tsx`, 집계 API는 `dashboard/lib/wiki-review.ts`, 로컬 HTTP 라우팅은 `dashboard/local-api.ts`에 있다.
 
@@ -41,6 +43,8 @@
 ## Code Connect 상태
 
 현재 Figma 컴포넌트는 파일 내부 로컬 컴포넌트이며 아직 라이브러리로 게시되지 않았다. Figma Code Connect는 게시된 컴포넌트만 연결할 수 있으므로 이번 단계에서는 이 매핑 문서를 기준으로 삼는다. 라이브러리 게시 후 다음 React 경로를 단순 매핑으로 등록한다.
+
+현재 연결 계정은 Code Connect에 필요한 Organization/Enterprise Dev 또는 Full 좌석도 없어 공식 연결 도구가 거절되었다. 게시와 좌석 조건이 해결되기 전에는 `.figma.ts`를 생성하지 않는다.
 
 - `16:21` → `dashboard/app/wiki/components.tsx` / `Button`
 - `17:34` → `dashboard/app/wiki/components.tsx` / `StatusBadge`
