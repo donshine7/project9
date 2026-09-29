@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { pathIsInside } from './runtime-environment';
 import {
@@ -72,11 +73,20 @@ function sourceSnapshot(db: DatabaseSync, source: Awaited<ReturnType<typeof read
   let bytes: Buffer;
   let parsed: ReturnType<typeof parseWikiMarkdown>;
   try {
-    const fileStat = lstatSync(source.absolutePath);
+    const indexedPath = path.resolve(source.vaultRoot, ...String(document.relative_path).split('/'));
+    check(pathIsInside(source.vaultRoot, indexedPath), '문서 파일 경로가 변경되었습니다.', 409, 'WIKI_DOCUMENT_APPROVAL_STALE');
+    const fileStat = lstatSync(indexedPath);
+    const resolvedVault = realpathSync(source.vaultRoot);
+    const resolvedIndexed = realpathSync(indexedPath);
+    const resolvedLoaded = realpathSync(source.absolutePath);
+    const sameResolvedPath = process.platform === 'win32'
+      ? resolvedIndexed.toLowerCase() === resolvedLoaded.toLowerCase()
+      : resolvedIndexed === resolvedLoaded;
     check(fileStat.isFile() && !fileStat.isSymbolicLink()
-      && pathIsInside(realpathSync(source.vaultRoot), realpathSync(source.absolutePath)),
+      && pathIsInside(resolvedVault, resolvedIndexed)
+      && sameResolvedPath,
     '문서 파일 경로가 변경되었습니다.', 409, 'WIKI_DOCUMENT_APPROVAL_STALE');
-    bytes = readFileSync(source.absolutePath);
+    bytes = readFileSync(indexedPath);
     parsed = parseWikiMarkdown(bytes);
   } catch (error) {
     if (error instanceof WorkDbError) throw error;

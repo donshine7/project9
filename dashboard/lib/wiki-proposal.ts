@@ -68,7 +68,7 @@ function sourceRecord(db: DatabaseSync, id: string): EvidenceRecord | null {
   return { kind: 'source', id, entityType: source.entity_type, entityId: source.entity_id, sourceHash: hash(source), content: source };
 }
 
-function collectEvidence(db: DatabaseSync, entityType: string, entityId: string) {
+export function wikiProposalEvidenceSnapshot(db: DatabaseSync, entityType: string, entityId: string) {
   const events = (db.prepare(`SELECT event_id FROM wiki_entry e WHERE entity_type=? AND entity_id=? AND NOT EXISTS(SELECT 1 FROM wiki_entry n WHERE n.supersedes_id=e.id) ORDER BY event_id`).all(entityType, entityId) as Row[])
     .map((item) => eventRecord(db, item.event_id))
     .filter(Boolean) as EvidenceRecord[];
@@ -96,7 +96,7 @@ export async function prepareWikiMarkdownProposal(docId: string, retryOf?: strin
   const source = await readWikiMarkdownSource(docId);
   check(!source.indexStale, '인덱스 이후 Markdown이 변경되었습니다. 먼저 다시 스캔하세요.', 409, 'WIKI_PROPOSAL_BASE_STALE');
   check(source.frontmatter.document_type === 'entity_wiki', '엔티티 Wiki 문서만 AI 개정 제안을 만들 수 있습니다.');
-  const evidence = withDatabase((db) => collectEvidence(db, source.frontmatter.entity_type!, source.frontmatter.entity_id!));
+  const evidence = withDatabase((db) => wikiProposalEvidenceSnapshot(db, source.frontmatter.entity_type!, source.frontmatter.entity_id!));
   check(evidence.records.length > 0, '개정 제안에 사용할 검증된 event/source 근거가 없습니다.', 409, 'WIKI_PROPOSAL_EVIDENCE_REQUIRED');
 
   const policy = analysisPolicy();
@@ -198,7 +198,7 @@ export async function ingestWikiMarkdownProposal(input: WikiProposalInput) {
 
   const source = await readWikiMarkdownSource(input.docId);
   check(!source.indexStale && source.byteHash === input.baseByteHash, '사람 편집 또는 파일 변경으로 제안 base가 오래되었습니다.', 409, 'WIKI_PROPOSAL_BASE_STALE');
-  const currentEvidence = withDatabase((db) => collectEvidence(db, frozen.entityType, frozen.entityId));
+  const currentEvidence = withDatabase((db) => wikiProposalEvidenceSnapshot(db, frozen.entityType, frozen.entityId));
   check(currentEvidence.snapshotHash === input.evidenceSnapshotHash, '근거가 변경되었습니다. 최신 입력으로 다시 제안하세요.', 409, 'WIKI_PROPOSAL_EVIDENCE_STALE');
 
   const parsed = parseWikiMarkdown(Buffer.from(input.proposedMarkdown, 'utf8'));
@@ -289,7 +289,7 @@ export async function reconcileWikiMarkdownProposal(proposalId: string) {
   try { source = await readWikiMarkdownSource(state.doc_id); } catch { source = null; }
   return withDatabase((db) => transaction(db, () => {
     const proposal = row(db, 'SELECT * FROM wiki_proposal WHERE id=?', proposalId)!;
-    const currentEvidence = collectEvidence(db, state.entity_type, state.entity_id);
+    const currentEvidence = wikiProposalEvidenceSnapshot(db, state.entity_type, state.entity_id);
     const evidenceStale = currentEvidence.snapshotHash !== proposal.evidence_snapshot_hash;
     const checkedAt = now();
     for (const evidence of db.prepare('SELECT * FROM wiki_proposal_evidence WHERE proposal_id=?').all(proposalId) as Row[]) {

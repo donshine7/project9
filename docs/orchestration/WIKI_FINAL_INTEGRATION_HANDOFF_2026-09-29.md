@@ -16,6 +16,8 @@
 
 `wiki-review.ts`는 byte hash만으로 문서 승인을 표시하지 않는다. 동일한 Markdown이라도 인용 event 내용이 변경돼 evidence snapshot hash가 달라지면 `evidence_stale`로 표시한다.
 
+컷오버는 preflight만 신뢰하지 않는다. 백업 snapshot 뒤 실제 `source_mode` 변경과 같은 `BEGIN IMMEDIATE` transaction 안에서 현재 파일, 인덱스, revision, 원본 모드, 문서 승인 또는 제안 검토와 현재 evidence snapshot을 다시 검증한다. preflight 뒤 event가 바뀐 합성 회귀에서는 transaction 전체가 롤백되고 `legacy_db`가 유지된다.
+
 승인 HTTP 계약은 다음과 같다.
 
 - `GET /api/wiki-review/documents/:docId/approvals`: 현재 revision/hash/evidence와 승인 이력을 반환한다. 검토자 서버 문맥이 없으면 자료는 읽을 수 있지만 `allowed=false`, `WIKI_DOCUMENT_APPROVAL_AUTH_REQUIRED`이다. 문서·근거 409 도메인 오류도 UI가 표시할 수 있는 `allowed=false/code/reason` 형태로 바꾼다.

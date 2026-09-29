@@ -135,6 +135,30 @@ async function main() {
     );
     withDatabase((db) => db.prepare('UPDATE event SET after_json=? WHERE id=?').run('{"fact":"합성 근거"}', eventId));
 
+    let beforeCommitCalls = 0;
+    await assert.rejects(
+      () => executeWikiCutover({
+        authorizationId: 'stage6-toctou-evidence-001',
+        reviewer: '장진태',
+        confirmation: 'CUTOVER',
+        bundleRoot,
+        targets: [{ docId, expectedByteHash: approvedHash, proposalId: ingested.proposal.id }],
+      }, {
+        beforeCommit: () => {
+          beforeCommitCalls++;
+          withDatabase((db) => db.prepare('UPDATE event SET after_json=? WHERE id=?')
+            .run('{"fact":"preflight 이후 변경된 합성 근거"}', eventId));
+        },
+      }),
+      (error: any) => error?.code === 'WIKI_CUTOVER_REVIEW_STALE',
+    );
+    assert.equal(beforeCommitCalls, 1);
+    withDatabase((db) => {
+      assert.equal((db.prepare('SELECT source_mode FROM wiki_document_source_mode WHERE doc_id=?').get(docId) as any).source_mode, 'legacy_db');
+      assert.equal(db.prepare("SELECT id FROM wiki_cutover_run WHERE authorization_id='stage6-toctou-evidence-001'").get(), undefined);
+      db.prepare('UPDATE event SET after_json=? WHERE id=?').run('{"fact":"합성 근거"}', eventId);
+    });
+
     const cutover: any = await executeWikiCutover({
       authorizationId: 'stage6-synthetic-authorization-001',
       reviewer: '장진태',
