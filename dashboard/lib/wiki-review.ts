@@ -1,6 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { getWikiDocumentApproval } from './wiki-document-approval';
 import { readWikiMarkdownSource, wikiMarkdownDetail, wikiMarkdownIndex } from './wiki-markdown';
+import { runtimeProfile } from './runtime-environment';
+import { inspectOperationalWikiReadiness } from './wiki-scale';
 import { withDatabase, WorkDbError } from './work-db';
 
 type Row = Record<string, any>;
@@ -36,6 +38,53 @@ type DocumentApprovalSummary = {
   evidenceSnapshotHash: string | null;
   approvedAt: string;
 };
+
+function operationContext() {
+  const profile = runtimeProfile();
+  if (profile === 'operational') {
+    try {
+      const readiness = inspectOperationalWikiReadiness();
+      return {
+        runtimeProfile: profile,
+        batchReadiness: {
+          readyForPilot: readiness.readyForPilot,
+          blockers: readiness.blockers,
+          summary: readiness.summary,
+        },
+      };
+    } catch (error) {
+      return {
+        runtimeProfile: profile,
+        batchReadiness: {
+          readyForPilot: false,
+          blockers: [error instanceof Error ? error.message : '운영 준비도 확인에 실패했습니다.'],
+        },
+      };
+    }
+  }
+  return withDatabase((db) => {
+    const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wiki_scale_run'").get();
+    if (!exists) return { runtimeProfile: profile, batchReadiness: null };
+    const latest = db.prepare('SELECT * FROM wiki_scale_run ORDER BY created_at DESC,id DESC LIMIT 1').get() as Row | undefined;
+    if (!latest) return { runtimeProfile: profile, batchReadiness: null };
+    let blockers: unknown[] = [];
+    try { blockers = JSON.parse(String(latest.blockers_json ?? '[]')) as unknown[]; } catch { blockers = ['준비도 차단 사유를 읽을 수 없습니다.']; }
+    return {
+      runtimeProfile: profile,
+      batchReadiness: {
+        status: latest.status,
+        blockers,
+        runId: latest.id,
+        documentCount: latest.document_count,
+        validDocumentCount: latest.valid_document_count,
+        issueCount: latest.issue_count,
+        elapsedMs: latest.elapsed_ms,
+        staleProposalCount: latest.stale_proposal_count,
+        reviewReadyCount: latest.review_ready_count,
+      },
+    };
+  });
+}
 
 export const wikiReviewStatusMeta: Record<WikiReviewStatus, { label: string; tone: string }> = {
   reviewed: { label: '검토 완료', tone: 'reviewed' },
@@ -152,6 +201,7 @@ export async function wikiReviewIndex() {
     latestScan: Row | null;
   };
   const proposals = latestProposals();
+  const operation = operationContext();
   const documents: WikiReviewIndexItem[] = await Promise.all(markdownIndex.documents.map(async (document) => {
     let currentByteHash: string | null = document.byteHash ?? null;
     let indexStale = document.parseStatus !== 'valid';
@@ -225,7 +275,7 @@ export async function wikiReviewIndex() {
       documents.filter((document) => document.status === status).length,
     ]),
   );
-  return { documents, latestScan: markdownIndex.latestScan, counts };
+  return { documents, latestScan: markdownIndex.latestScan, counts, operationContext: operation };
 }
 
 function entitySnapshot(db: DatabaseSync, document: Row) {
@@ -326,5 +376,6 @@ export async function wikiReviewDocument(docId: string) {
     database: database.snapshot,
     proposal: database.proposal,
     latestScan: index.latestScan,
+    operationContext: index.operationContext,
   };
 }

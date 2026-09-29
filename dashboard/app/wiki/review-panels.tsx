@@ -92,6 +92,7 @@ export function WorkStateBoundary() {
 }
 
 export function WikiOperationStateCard({ view }: { view: WikiOperationView }) {
+  const batch = view.state === 'BatchReady' || view.state === 'BatchBlocked';
   return (
     <section
       className={`${styles.operation} ${styles[`operation_${view.tone}`]}`}
@@ -100,7 +101,7 @@ export function WikiOperationStateCard({ view }: { view: WikiOperationView }) {
     >
       <div className={styles.stateHeading}>
         <span className={styles.status}>{view.label}</span>
-        <h3>자동 반영 작업</h3>
+        <h3>{batch ? '배치 준비도' : '자동 반영 작업'}</h3>
       </div>
       <p><strong>이유</strong> · {view.reason}</p>
       <p><strong>다음 행동</strong> · {view.nextAction}</p>

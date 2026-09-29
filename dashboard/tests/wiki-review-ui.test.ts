@@ -73,6 +73,9 @@ assert.equal(wikiOperationView({ ...reviewedProposal, applyOperation: {
 } }, hash)?.state, 'Conflict');
 assert.equal(wikiOperationView({ ...reviewedProposal, status: 'stale_evidence' }, hash)?.state, 'Stale');
 assert.equal(wikiOperationView({ ...reviewedProposal, status: 'prepared' }, hash, { runtimeProfile: 'operational' })?.state, 'OperationalBlocked');
+assert.equal(wikiOperationView({ ...reviewedProposal, applyOperation: {
+  id: 'operation-3', status: 'file_applied', attemptCount: 1,
+} }, hash, { runtimeProfile: 'operational' })?.state, 'OperationalBlocked');
 assert.equal(wikiOperationView({ ...reviewedProposal, status: 'prepared' }, hash, { runtimeProfile: 'test' }), null);
 assert.equal(wikiOperationView(null, null, { batchReadiness: { status: 'passed', blockers: [] } })?.state, 'BatchReady');
 assert.equal(wikiOperationView(null, null, { batchReadiness: { status: 'failed', blockers: ['synthetic'] } })?.state, 'BatchBlocked');

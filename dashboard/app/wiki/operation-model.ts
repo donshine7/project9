@@ -65,6 +65,11 @@ export function wikiOperationView(
     reason: '검토 뒤 문서 또는 근거가 변경되어 기존 승인을 재사용할 수 없습니다.',
     nextAction: '다시 색인하고 현재 문서·근거로 새 제안을 검토하세요.',
   };
+  if (context.runtimeProfile === 'operational') return {
+    state: 'OperationalBlocked', label: '자동 반영 차단', tone: 'warning',
+    reason: '운영 프로필에서는 이 화면의 자동 승인·적용·복구를 실행하지 않습니다.',
+    nextAction: '읽기 전용 준비도를 확인하고 별도 운영 작업창과 승인 게이트를 사용하세요.',
+  };
   if (operation && ['prepared', 'file_applied', 'indexed'].includes(String(operation.status))) return {
     state: 'Recoverable', label: '검증 후 복구 가능', tone: 'info',
     reason: `작업 ${operation.id} · ${operation.status} · 시도 ${operation.attemptCount ?? 1}회`,
@@ -98,11 +103,6 @@ export function wikiOperationView(
     state: 'ManualReviewed', label: '수동 검토 완료', tone: 'reviewed',
     reason: 'AI 제안의 수동 반영 검토 이력은 있으나 운영 자동반영 조건은 아직 충족되지 않았습니다.',
     nextAction: '현재 base·target·근거 hash를 다시 대조하세요.',
-  };
-  if (context.runtimeProfile === 'operational') return {
-    state: 'OperationalBlocked', label: '자동 반영 차단', tone: 'warning',
-    reason: '운영 프로필이며 이 제안은 수동 검토 완료 상태가 아닙니다.',
-    nextAction: '문서와 근거를 검토하고 제안 상태를 확정하세요.',
   };
   return null;
 }

@@ -10,7 +10,7 @@ import {
   Tab,
 } from './components';
 import { wikiApprovalAdapter } from './review-adapter';
-import { wikiOperationView } from './operation-model';
+import { wikiBatchOperationView, wikiOperationView, type WikiOperationContext } from './operation-model';
 import { DocumentApprovalPanel, ReviewStatePanel, WikiOperationStateCard, WorkStateBoundary } from './review-panels';
 import { displayStatus, displayStatusMeta, matchesReviewFilter, type ApprovalAction, type DocumentApproval, type ReviewStateInput } from './review-model';
 
@@ -37,6 +37,7 @@ type ReviewIndex = {
   documents: ReviewDocument[];
   latestScan: Row | null;
   counts: Record<string, number>;
+  operationContext?: WikiOperationContext;
 };
 
 type ReviewDetail = {
@@ -46,6 +47,7 @@ type ReviewDetail = {
   proposal: Row | null;
   latestScan: Row | null;
   recovery?: { status: string } | null;
+  operationContext?: WikiOperationContext;
 };
 
 async function request(url: string, options?: RequestInit) {
@@ -195,7 +197,9 @@ export default function WikiPage() {
   const reviewInput = detail
     ? reviewState(detail.item, detail.proposal?.status, detail.proposal?.updatedAt, detail.recovery?.status)
     : null;
-  const operationView = detail ? wikiOperationView(detail.proposal, detail.item.currentByteHash) : null;
+  const operationContext = detail?.operationContext ?? index.operationContext;
+  const operationView = detail ? wikiOperationView(detail.proposal, detail.item.currentByteHash, operationContext) : null;
+  const batchOperationView = wikiBatchOperationView(operationContext);
 
   return (
     <div className="wiki-review-shell">
@@ -305,6 +309,7 @@ export default function WikiPage() {
 
               {reviewInput && <ReviewStatePanel input={reviewInput} />}
               {operationView && <WikiOperationStateCard view={operationView} />}
+              {batchOperationView && <WikiOperationStateCard view={batchOperationView} />}
               <WorkStateBoundary />
               {reviewInput && (
                 <DocumentApprovalPanel
