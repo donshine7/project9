@@ -143,7 +143,7 @@ function stringList(value: FrontmatterValue | undefined, name: string, maxItems:
 
 export function parseWikiMarkdown(bytes: Buffer) {
   if (bytes.length > MAX_MARKDOWN_BYTES) throw new Error(`Markdown은 ${MAX_MARKDOWN_BYTES} bytes 이하여야 합니다.`);
-  const source = bytes.toString('utf8').replace(/^\uFEFF/, '');
+  const source = Buffer.from(bytes).toString('utf8').replace(/^\uFEFF/, '');
   const normalized = source.replace(/\r\n?/g, '\n');
   if (!normalized.startsWith('---\n')) throw new Error('문서 첫 줄에 YAML frontmatter가 필요합니다.');
   const end = normalized.indexOf('\n---\n', 4);

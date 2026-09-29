@@ -34,7 +34,9 @@ export type WikiProposalInput = {
 };
 
 const now = () => new Date().toISOString();
-const hash = (value: unknown) => createHash('sha256').update(typeof value === 'string' || Buffer.isBuffer(value) ? value : JSON.stringify(value)).digest('hex');
+const hash = (value: unknown) => createHash('sha256').update(
+  typeof value === 'string' ? value : Buffer.isBuffer(value) ? Buffer.from(value as Uint8Array) : JSON.stringify(value),
+).digest('hex');
 function check(condition: unknown, message: string, status = 400, code = 'WIKI_PROPOSAL_VALIDATION'): asserts condition {
   if (!condition) throw new WorkDbError(message, status, code);
 }

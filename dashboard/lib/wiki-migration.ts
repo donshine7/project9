@@ -33,7 +33,9 @@ type MigrationItem = {
 };
 
 const now = () => new Date().toISOString();
-const hash = (value: unknown) => createHash('sha256').update(typeof value === 'string' || Buffer.isBuffer(value) ? value : JSON.stringify(value)).digest('hex');
+const hash = (value: unknown) => createHash('sha256').update(
+  typeof value === 'string' ? value : Buffer.isBuffer(value) ? Buffer.from(value as Uint8Array) : JSON.stringify(value),
+).digest('hex');
 function check(condition: unknown, message: string, status = 400, code = 'WIKI_MIGRATION_VALIDATION'): asserts condition {
   if (!condition) throw new WorkDbError(message, status, code);
 }
@@ -153,7 +155,7 @@ function verifyExistingOutput(outputRoot: string, expected: { runId: string; con
   const resolvedOutput = realpathSync(outputRoot);
   check(existsSync(manifestFile) && lstatSync(manifestFile).isFile() && !lstatSync(manifestFile).isSymbolicLink() && pathIsInside(resolvedOutput, realpathSync(manifestFile)), '기존 출력 폴더에 유효한 migration-manifest.json이 없습니다.', 409, 'WIKI_MIGRATION_OUTPUT_CONFLICT');
   const bytes = readFileSync(manifestFile);
-  const manifest = JSON.parse(bytes.toString('utf8')) as Row;
+  const manifest = JSON.parse(Buffer.from(bytes).toString('utf8')) as Row;
   check(
     manifest.schema === 'wiki-legacy-migration-v1'
       && manifest.runId === expected.runId

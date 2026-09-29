@@ -112,7 +112,7 @@ function currentFile(vault: string, relativePath: string, expectedHash: string) 
     if (!stat.isFile() || stat.isSymbolicLink() || !pathIsInside(realpathSync(vault), realpathSync(file))) return { hash: null, markdown: '', blocker: 'FILE_PATH_UNSAFE' };
     const bytes = readFileSync(file);
     const hash = sha256(bytes);
-    return { hash, markdown: bytes.toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'), blocker: hash === expectedHash ? null : 'FILE_HASH_STALE' };
+    return { hash, markdown: Buffer.from(bytes).toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'), blocker: hash === expectedHash ? null : 'FILE_HASH_STALE' };
   } catch {
     return { hash: null, markdown: '', blocker: 'FILE_UNREADABLE' };
   }

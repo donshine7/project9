@@ -196,7 +196,7 @@ async function main() {
     });
     assert.equal(cutover.run.status, 'succeeded');
     assert.equal(cutover.items.length, 1);
-    assert.equal(readFileSync(matterFile).equals(approvedBytes), true, '원본 전환은 활성 Markdown을 수정하면 안 된다.');
+    assert.equal(Buffer.compare(readFileSync(matterFile), approvedBytes), 0, '원본 전환은 활성 Markdown을 수정하면 안 된다.');
     assert.equal(existsSync(path.join(cutover.run.bundle_path, 'database-before.db')), true);
     assert.equal(existsSync(path.join(cutover.run.bundle_path, 'database-after.db')), true);
     assert.equal(existsSync(path.join(cutover.run.bundle_path, 'vault', '10_Matters', 'P260601-KR.md')), true);

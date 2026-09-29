@@ -672,7 +672,7 @@ export function rehearseWikiRecovery(cutoverRunId: string, restoreRootInput: str
           approvalEventId: target.documentApprovalEventId,
           document,
           revision,
-          markdown: fileBytes.toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'),
+          markdown: Buffer.from(fileBytes).toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'),
           expectedByteHash: target.byteHash,
           reviewer: manifest.reviewer,
         });

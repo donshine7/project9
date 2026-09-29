@@ -88,7 +88,7 @@ function artifactJson(root: string, relative: string, expected: (data: Row) => b
     const file = physicalFile(root, relative);
     if (!file) return null;
     const bytes = readFileSync(file);
-    const data = json(bytes.toString('utf8'));
+    const data = json(Buffer.from(bytes).toString('utf8'));
     return data && expected(data) ? { data, sha256: sha256(bytes) } : null;
   } catch { return null; }
 }
@@ -146,7 +146,7 @@ function revisionEvidence(source: Record<string, Row[]>, revision: Row, vault: s
       const file = physicalFile(vault, document.relative_path);
       if (file) {
         const bytes = readFileSync(file);
-        const normalized = bytes.toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+        const normalized = Buffer.from(bytes).toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
         markdownHash = sha256(bytes);
         markdownTextHash = sha256(normalized);
         markdownEvidence = wikiDocumentEvidenceSnapshot(normalized, (id) => {
@@ -343,7 +343,7 @@ function verifySealed(db: DatabaseSync, outputRoot: string, current: ReturnType<
   check(manifestFile, 'WIKI_ARCHIVE_EXISTING_MISMATCH', 'archive manifest가 없습니다.');
   const manifestBytes = readFileSync(manifestFile);
   check(sha256(manifestBytes) === run.manifest_hash, 'WIKI_ARCHIVE_EXISTING_MISMATCH', 'archive manifest hash가 원장과 다릅니다.');
-  const manifest = json(manifestBytes.toString('utf8')) as ArchiveManifest | null;
+  const manifest = json(Buffer.from(manifestBytes).toString('utf8')) as ArchiveManifest | null;
   check(manifest?.schema === 'wiki-legacy-archive-v2' && manifest.runId === run.id && manifest.sourceSnapshotHash === current.sourceSnapshotHash
     && manifest.outputRootHash === sha256(outputRoot.toLowerCase()) && run.source_snapshot_hash === current.sourceSnapshotHash,
   'WIKI_ARCHIVE_EXISTING_MISMATCH', '현재 원본 또는 manifest가 봉인 기록과 다릅니다.');

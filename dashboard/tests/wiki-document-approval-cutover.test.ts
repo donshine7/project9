@@ -188,7 +188,7 @@ tags: [test, approval]
     assert.equal(cutover.run.status, 'succeeded');
     assert.equal(cutover.items[0].document_approval_event_id, approvalEventId);
     assert.equal(cutover.items[0].proposal_id, null);
-    assert.equal(readFileSync(matterFile).equals(beforeBytes), true);
+    assert.equal(Buffer.compare(readFileSync(matterFile), beforeBytes), 0);
 
     const recovery: any = rehearseWikiRecovery(cutover.run.id, restoreRoot);
     assert.equal(recovery.verifiedDocumentCount, 1);
