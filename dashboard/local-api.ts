@@ -57,6 +57,11 @@ import {
   wikiMarkdownProposalDetail,
 } from './lib/wiki-proposal';
 import { wikiReviewDocument, wikiReviewIndex } from './lib/wiki-review';
+import {
+  approveWikiDocument,
+  getWikiDocumentApproval,
+  type AuthenticatedWikiReviewer,
+} from './lib/wiki-document-approval';
 import { runLegacyWikiMigrationDryRun, wikiMigrationRun } from './lib/wiki-migration';
 import {
   completeWorkRefreshStage,
@@ -257,6 +262,23 @@ async function readBody(req: any, maxBytes = 16 * 1024): Promise<any> {
   return JSON.parse(body.toString('utf8'));
 }
 
+function trustedWikiReviewer(): AuthenticatedWikiReviewer | null {
+  const actorId = String(process.env.SSPAT_AUTHENTICATED_REVIEWER ?? '').trim();
+  const authenticationMethod = String(process.env.SSPAT_REVIEWER_AUTH_METHOD ?? '').trim();
+  if (actorId !== '장진태' || !authenticationMethod) return null;
+  return { actorId, authenticated: true, authenticationMethod };
+}
+
+function assertNoReviewerIdentity(body: any) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new WorkDbError('승인 요청 본문은 객체여야 합니다.', 400, 'WIKI_DOCUMENT_APPROVAL_INVALID');
+  }
+  const forbidden = ['docId', 'reviewer', 'actor', 'actorId', 'authenticated', 'authenticationMethod'];
+  if (forbidden.some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
+    throw new WorkDbError('문서 ID와 검토자 신원은 요청 본문에서 지정할 수 없습니다.', 400, 'WIKI_DOCUMENT_APPROVAL_IDENTITY_FORBIDDEN');
+  }
+}
+
 function validateInput(body: any) {
   const projectName = typeof body?.projectName === 'string' ? body.projectName.trim() : '';
   const rawCases = Array.isArray(body?.ptCaseNumbers)
@@ -368,6 +390,7 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
   const wikiMarkdownProposalActionRoute = pathname.match(/^\/api\/wiki-markdown\/proposals\/([^/]+)\/(reconcile|reviews)$/);
   const wikiMarkdownScanIssuesRoute = pathname.match(/^\/api\/wiki-markdown\/scans\/([^/]+)\/issues$/);
   const wikiReviewDocumentRoute = pathname.match(/^\/api\/wiki-review\/documents\/([^/]+)$/);
+  const wikiReviewDocumentApprovalRoute = pathname.match(/^\/api\/wiki-review\/documents\/([^/]+)\/approvals$/);
   const wikiMigrationRoute = pathname.match(/^\/api\/wiki-migrations\/([^/]+)$/);
   const matterRoute = pathname.match(/^\/api\/matters\/([^/]+)$/);
   const matterChildRoute = pathname.match(/^\/api\/matters\/([^/]+)\/(work-items|notes|actions)$/);
@@ -422,7 +445,7 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     || pathname === '/api/wiki-review'
     || pathname === '/api/wiki-migrations/legacy-dry-runs'
     || Boolean(wikiRoute || wikiReviewRoute || wikiEvidenceRoute)
-    || Boolean(wikiMarkdownDocumentRoute || wikiMarkdownProposalPrepareRoute || wikiMarkdownProposalRoute || wikiMarkdownProposalActionRoute || wikiMarkdownScanIssuesRoute || wikiReviewDocumentRoute || wikiMigrationRoute)
+    || Boolean(wikiMarkdownDocumentRoute || wikiMarkdownProposalPrepareRoute || wikiMarkdownProposalRoute || wikiMarkdownProposalActionRoute || wikiMarkdownScanIssuesRoute || wikiReviewDocumentRoute || wikiReviewDocumentApprovalRoute || wikiMigrationRoute)
     || Boolean(workRefreshRoute || workRefreshStageCreateRoute || workRefreshStageRoute || workRefreshResultRoute || workRefreshFinalizeRoute)
     || Boolean(downloadNoticeRoute || downloadNoticeRecheckRoute || downloadNoticePreviewRoute || downloadNoticeProjectRoute || downloadNoticeProjectLinkRoute || downloadJobEventsRoute || downloadJobResumeRoute)
     || Boolean(responseProjectRoute || responseReconcileRoute || responseStageRoute || responseApprovalRoute || responseTaskRoute)
@@ -479,6 +502,57 @@ async function handleWorkApi(req: any, requestUrl: URL): Promise<{ status: numbe
     if (req.method === 'GET' && pathname === '/api/wiki') return { status: 200, payload: { entities: wikiIndex(requestUrl.searchParams.get('q') || '') } };
     if (req.method === 'GET' && pathname === '/api/wiki-markdown') return { status: 200, payload: wikiMarkdownIndex() };
     if (req.method === 'GET' && pathname === '/api/wiki-review') return { status: 200, payload: await wikiReviewIndex() };
+    if (req.method === 'GET' && wikiReviewDocumentApprovalRoute) {
+      const docId = decodeURIComponent(wikiReviewDocumentApprovalRoute[1]);
+      try {
+        const payload = await getWikiDocumentApproval(docId);
+        if (!trustedWikiReviewer()) return {
+          status: 200,
+          payload: {
+            ...payload,
+            allowed: false,
+            code: 'WIKI_DOCUMENT_APPROVAL_AUTH_REQUIRED',
+            reason: '신뢰된 서버 검토자 세션이 설정되지 않았습니다.',
+          },
+        };
+        return { status: 200, payload };
+      } catch (error) {
+        if (error instanceof WorkDbError && error.status !== 404) return {
+          status: 200,
+          payload: {
+            docId,
+            allowed: false,
+            code: error.code,
+            reason: error.message,
+            expectedRevisionId: '',
+            expectedByteHash: '',
+            expectedTextHash: '',
+            expectedEvidenceSnapshotHash: '',
+          },
+        };
+        throw error;
+      }
+    }
+    if (req.method === 'POST' && wikiReviewDocumentApprovalRoute) {
+      const reviewer = trustedWikiReviewer();
+      if (!reviewer) throw new WorkDbError(
+        '신뢰된 서버 검토자 세션이 필요합니다.',
+        403,
+        'WIKI_DOCUMENT_APPROVAL_AUTH_REQUIRED',
+      );
+      const body = await readBody(req, 16 * 1024);
+      assertNoReviewerIdentity(body);
+      const result = await approveWikiDocument({
+          docId: decodeURIComponent(wikiReviewDocumentApprovalRoute[1]),
+          expectedRevisionId: body.expectedRevisionId,
+          expectedByteHash: body.expectedByteHash,
+          expectedTextHash: body.expectedTextHash,
+          expectedEvidenceSnapshotHash: body.expectedEvidenceSnapshotHash,
+          idempotencyKey: body.idempotencyKey,
+          statement: body.statement,
+        }, reviewer);
+      return { status: result.duplicate ? 200 : 201, payload: result };
+    }
     if (req.method === 'GET' && wikiReviewDocumentRoute) return { status: 200, payload: await wikiReviewDocument(decodeURIComponent(wikiReviewDocumentRoute[1])) };
     if (req.method === 'POST' && pathname === '/api/wiki-markdown/scans') return { status: 201, payload: await scanWikiMarkdownVault() };
     if (req.method === 'POST' && wikiMarkdownProposalPrepareRoute) return { status: 201, payload: await prepareWikiMarkdownProposal(decodeURIComponent(wikiMarkdownProposalPrepareRoute[1])) };

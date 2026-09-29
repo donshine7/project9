@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { wikiMarkdownDetail, wikiMarkdownIndex } from './wiki-markdown';
+import { getWikiDocumentApproval } from './wiki-document-approval';
+import { readWikiMarkdownSource, wikiMarkdownDetail, wikiMarkdownIndex } from './wiki-markdown';
 import { withDatabase, WorkDbError } from './work-db';
 
 type Row = Record<string, any>;
@@ -58,6 +59,7 @@ export function deriveWikiReviewStatus(input: {
   proposalUpdatedAt?: string | null;
   documentApprovalByteHash?: string | null;
   documentApprovalCreatedAt?: string | null;
+  documentApprovalEvidenceStale?: boolean;
 }): WikiReviewStatus {
   if (input.latestScanStatus === 'running') return 'indexing';
   if (input.parseStatus === 'missing') return 'missing';
@@ -72,6 +74,7 @@ export function deriveWikiReviewStatus(input: {
       || Boolean(input.documentApprovalCreatedAt && input.documentApprovalCreatedAt >= input.proposalUpdatedAt)
     )
   );
+  if (input.documentApprovalEvidenceStale) return 'evidence_stale';
   if (approvedCurrentDocument) return 'reviewed';
   if (['stale_document', 'failed'].includes(String(input.proposalStatus))) return 'conflict';
   if (input.proposalStatus === 'stale_evidence') return 'evidence_stale';
@@ -88,51 +91,6 @@ export function deriveWikiReviewStatus(input: {
   ) return 'reviewed';
   if (input.reviewedBaseByteHash && input.currentByteHash === input.reviewedBaseByteHash) return 'up_to_date';
   return 'needs_review';
-}
-
-function latestDocumentApprovals() {
-  return withDatabase((db) => {
-    const rows = db.prepare(`
-      SELECT e.id,e.after_json,e.actor,e.created_at
-      FROM event e
-      WHERE e.event_type='wiki.document_approved'
-        AND EXISTS (
-          SELECT 1
-          FROM user_feedback f
-          WHERE f.event_id=e.id
-            AND f.feedback_action='accept'
-            AND f.reason_code='approved_as_is'
-        )
-      ORDER BY e.created_at DESC,e.id DESC
-    `).all() as Row[];
-    const byDocument = new Map<string, DocumentApprovalSummary>();
-    for (const row of rows) {
-      try {
-        const payload = JSON.parse(String(row.after_json ?? '')) as Row;
-        const docId = String(payload.docId ?? '');
-        const byteHash = String(payload.byteHash ?? '').toLowerCase();
-        if (
-          payload.schema !== 'wiki-document-approval-v1'
-          || payload.approval !== 'approve_as_is'
-          || !docId
-          || !/^[0-9a-f]{64}$/.test(byteHash)
-          || byDocument.has(docId)
-        ) continue;
-        byDocument.set(docId, {
-          eventId: String(row.id),
-          reviewer: String(row.actor),
-          byteHash,
-          textHash: payload.textHash ? String(payload.textHash) : null,
-          revisionId: payload.revisionId ? String(payload.revisionId) : null,
-          evidenceSnapshotHash: payload.evidenceSnapshotHash ? String(payload.evidenceSnapshotHash) : null,
-          approvedAt: String(row.created_at),
-        });
-      } catch {
-        // Malformed audit events must never mark a document as reviewed.
-      }
-    }
-    return byDocument;
-  });
 }
 
 function proposalRows(db: DatabaseSync) {
@@ -194,22 +152,48 @@ export async function wikiReviewIndex() {
     latestScan: Row | null;
   };
   const proposals = latestProposals();
-  const documentApprovals = latestDocumentApprovals();
   const documents: WikiReviewIndexItem[] = await Promise.all(markdownIndex.documents.map(async (document) => {
     let currentByteHash: string | null = document.byteHash ?? null;
     let indexStale = document.parseStatus !== 'valid';
+    let documentApproval: DocumentApprovalSummary | null = null;
+    let documentApprovalEvidenceStale = false;
     if (document.parseStatus === 'valid') {
       try {
-        const detail = await wikiMarkdownDetail(document.docId) as Row;
-        currentByteHash = detail.currentByteHash ?? document.byteHash ?? null;
-        indexStale = Boolean(detail.indexStale);
+        const source = await readWikiMarkdownSource(document.docId);
+        currentByteHash = source.byteHash ?? document.byteHash ?? null;
+        indexStale = Boolean(source.indexStale);
       } catch {
         currentByteHash = null;
         indexStale = true;
       }
+      try {
+        if (indexStale) throw new Error('stale index');
+        const approvalSnapshot = await getWikiDocumentApproval(document.docId);
+        const currentApproval = approvalSnapshot.approvals.find((approval) => approval.current) ?? null;
+        const sameDocumentApproval = approvalSnapshot.approvals.find((approval) => Boolean(
+          approval.feedbackId
+          && approval.revisionId === approvalSnapshot.revisionId
+          && approval.byteHash === approvalSnapshot.byteHash
+          && approval.textHash === approvalSnapshot.textHash,
+        )) ?? null;
+        const approval = currentApproval ?? sameDocumentApproval;
+        documentApprovalEvidenceStale = Boolean(!currentApproval && sameDocumentApproval);
+        if (approval) {
+          documentApproval = {
+            eventId: approval.eventId,
+            reviewer: approval.reviewer,
+            byteHash: approval.byteHash,
+            textHash: approval.textHash,
+            revisionId: approval.revisionId,
+            evidenceSnapshotHash: approval.evidenceSnapshotHash,
+            approvedAt: approval.approvedAt,
+          };
+        }
+      } catch {
+        documentApproval = null;
+      }
     }
     const proposal = proposals.get(document.docId);
-    const documentApproval = documentApprovals.get(document.docId) ?? null;
     const status = deriveWikiReviewStatus({
       latestScanStatus: markdownIndex.latestScan?.status,
       parseStatus: document.parseStatus,
@@ -221,6 +205,7 @@ export async function wikiReviewIndex() {
       proposalUpdatedAt: proposal?.updated_at,
       documentApprovalByteHash: documentApproval?.byteHash,
       documentApprovalCreatedAt: documentApproval?.approvedAt,
+      documentApprovalEvidenceStale,
     });
     return {
       ...document,

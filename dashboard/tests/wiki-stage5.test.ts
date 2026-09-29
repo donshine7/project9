@@ -14,6 +14,7 @@ import {
   type WikiProposalInput,
 } from '../lib/wiki-proposal';
 import { deriveWikiReviewStatus, wikiReviewDocument, wikiReviewIndex } from '../lib/wiki-review';
+import { wikiDocumentEvidenceSnapshot } from '../lib/wiki-document-evidence';
 import { withDatabase } from '../lib/work-db';
 
 const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'sspat-wiki-stage5-'));
@@ -23,7 +24,7 @@ const databaseFile = path.join(temporaryRoot, 'db', 'work.db');
 const projectRoot = path.resolve(__dirname, '..', '..', 'dashboard', '..');
 const matterId = 'stage5-matter-001';
 const docId = 'wiki-stage5-matter-001';
-const eventId = 'stage5-event-001';
+const eventId = '55555555-5555-4555-8555-555555555555';
 const matterFile = path.join(matterDirectory, 'P260501-KR.md');
 
 process.env.SSPAT_RUNTIME_PROFILE = 'test';
@@ -49,6 +50,8 @@ tags: [eval, stage5]
 # P260501-KR
 
 ${body}
+
+[^stage5]: event:${eventId}
 `;
 }
 
@@ -128,6 +131,7 @@ async function main() {
 
     withDatabase((db) => {
       const document = db.prepare('SELECT * FROM wiki_document WHERE doc_id=?').get(docId) as any;
+      const evidence = wikiDocumentEvidenceSnapshot(markdown('활성 Markdown 최초 본문입니다.'), (id) => db.prepare('SELECT * FROM event WHERE id=?').get(id) as any);
       const approvalPayload = {
         schema: 'wiki-document-approval-v1',
         approval: 'approve_as_is',
@@ -135,7 +139,11 @@ async function main() {
         revisionId: document.current_revision_id,
         byteHash: document.byte_hash,
         textHash: document.text_hash,
-        evidenceSnapshotHash: 'stage5-approved-evidence',
+        evidenceEventIds: evidence.eventIds,
+        evidenceSnapshotHash: evidence.evidenceSnapshotHash,
+        sourceMode: 'markdown',
+        automaticApply: false,
+        sourceCutoverPerformed: false,
       };
       db.prepare(`INSERT INTO event(id,entity_type,entity_id,event_type,after_json,actor,source_type,correlation_id,created_at) VALUES ('stage5-document-approval','matter',?,'wiki.document_approved',?,'장진태','user_input',?,'2026-09-25T01:00:00.000Z')`)
         .run(matterId, JSON.stringify(approvalPayload), docId);
@@ -147,6 +155,15 @@ async function main() {
     assert.equal(approvedItem.status, 'reviewed');
     assert.equal(approvedItem.documentApproval.eventId, 'stage5-document-approval');
     assert.equal(approvedItem.documentApproval.byteHash, approvedItem.currentByteHash);
+
+    withDatabase((db) => db.prepare('UPDATE event SET after_json=? WHERE id=?')
+      .run('{"fact":"승인 후 변경된 합성 근거"}', eventId));
+    const staleEvidence: any = await wikiReviewIndex();
+    const staleEvidenceItem = staleEvidence.documents.find((item: any) => item.docId === docId);
+    assert.equal(staleEvidenceItem.status, 'evidence_stale');
+    assert.equal(staleEvidenceItem.documentApproval.eventId, 'stage5-document-approval');
+    withDatabase((db) => db.prepare('UPDATE event SET after_json=? WHERE id=?')
+      .run('{"fact":"합성 근거"}', eventId));
 
     const prepared = await prepareWikiMarkdownProposal(docId);
     bindAnalysis(prepared.runId, {

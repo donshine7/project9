@@ -16,7 +16,8 @@
 | StatusBadge | `17:34` | `dashboard/app/wiki/components.tsx#StatusBadge` | `status` 8종, 상태 라벨은 변형에서 결정 |
 | Tab | `18:16` | `dashboard/app/wiki/components.tsx#Tab` | `active`, children |
 | DocumentListItem | `19:23` | `dashboard/app/wiki/components.tsx#DocumentListItem` | `active`, `warning`, `documentTitle`, `meta`, `status` |
-| WikiOperationStateCard | `32:47` | BUILD-B 구현 예정 (`dashboard/app/wiki` 기능 전용) | `State` 9종, `Reason`, `Next action`; 문서 상태와 별개 |
+| 문서 검토 패널 | 별도 Figma 승인 프레임 없음 | `dashboard/app/wiki/review-panels.tsx#ReviewStatePanel` | 문서 승인·AI 제안 검토를 9개 표시 상태로 구분 |
+| WikiOperationStateCard | `32:47` | BUILD-E 이후 구현 예정 (`dashboard/app/wiki` 기능 전용) | 자동반영·복구·배치 `State` 9종, `Reason`, `Next action`; 문서 검토 상태와 별개 |
 
 화면 구현은 `dashboard/app/wiki/page.tsx`, 집계 API는 `dashboard/lib/wiki-review.ts`, 로컬 HTTP 라우팅은 `dashboard/local-api.ts`에 있다.
 
@@ -53,4 +54,6 @@
 
 ## 2026-09-29 승인·충돌 검토 확장
 
-기존 Figma 화면의 8개 API 상태는 유지하고, `review-model.ts`가 문서 승인 이력과 AI 제안 검토 이력을 구분하는 9개 표시 상태로 변환한다. `review-panels.tsx`의 `ReviewStatePanel`, `DocumentApprovalPanel`, `WorkStateBoundary`는 화면에 추가된 기능별 컴포넌트이며 스타일은 `review-panels.module.css`에 한정한다. 이 확장에 대한 Figma 화면 갱신·승인 기록은 아직 없으므로 기존 `23:2`를 새 상태의 승인 디자인으로 간주하지 않는다. 데이터·API 연결 조건은 `docs/orchestration/BUILD_B_WIKI_REVIEW_UI_HANDOFF_2026-09-29.md`를 따른다.
+기존 Figma 화면의 8개 API 상태는 유지하고, `review-model.ts`가 문서 승인 이력과 AI 제안 검토 이력을 구분하는 9개 표시 상태로 변환한다. `review-panels.tsx`의 `ReviewStatePanel`, `DocumentApprovalPanel`, `WorkStateBoundary`는 화면에 추가된 기능별 컴포넌트이며 스타일은 `review-panels.module.css`에 한정한다. 이 확장에 대한 Figma 승인 프레임은 아직 없으므로 기존 `23:2`나 운영 상태 보드 `31:3`을 문서 승인 패널의 승인 디자인으로 간주하지 않는다. 데이터·API 연결 조건은 `docs/orchestration/BUILD_B_WIKI_REVIEW_UI_HANDOFF_2026-09-29.md`를 따른다.
+
+Figma `31:3`·`32:47`의 9개 상태는 `ManualReviewed`, `ApprovalReady`, `AutoApproved`, `Stale`, `Conflict`, `Recoverable`, `OperationalBlocked`, `BatchReady`, `BatchBlocked`로, 자동반영·복구·배치 준비도를 위한 별도 축이다. React `review-model.ts`의 `approved`, `proposal_reviewed`, `needs_review` 등 문서 표시 상태 9개와 이름이나 의미가 같지 않다. BUILD-E 이후에도 두 축을 한 `status` 필드로 합치지 않는다.

@@ -4,46 +4,40 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { operationalDatabasePath, pathIsInside, resolveWikiVaultPath } from './runtime-environment';
+import {
+  canonicalWikiDocumentEvidence as canonical,
+  citedWikiDocumentEventIds,
+  wikiDocumentEvidenceSnapshot,
+  WikiDocumentEvidenceMissingError,
+  type WikiDocumentEvidenceEvent,
+} from './wiki-document-evidence';
 
 type Row = Record<string, any>;
 type Approval = { kind: 'document' | 'proposal' | 'none'; id: string | null; approvedEvidenceSnapshotHash: string | null; currentEvidenceSnapshotHash: string | null; crossEntityEvidenceCount: number; diagnostics: Row | null; fresh: boolean; blockers: string[] };
 
 const sha256 = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
-const canonical = (value: unknown): string => {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-};
 const one = (db: DatabaseSync, sql: string, ...params: any[]) => db.prepare(sql).get(...params) as Row | undefined;
 const all = (db: DatabaseSync, sql: string, ...params: any[]) => db.prepare(sql).all(...params) as Row[];
 const count = (db: DatabaseSync, sql: string, ...params: any[]) => Number(one(db, sql, ...params)?.n ?? 0);
 const json = (value: unknown) => { try { return JSON.parse(String(value ?? 'null')) as Row | null; } catch { return null; } };
 
-function eventHash(event: Row) {
-  return sha256(canonical({
-    id: event.id, entityType: event.entity_type, entityId: event.entity_id,
-    eventType: event.event_type, beforeJson: event.before_json, afterJson: event.after_json,
-    actor: event.actor, sourceType: event.source_type, correlationId: event.correlation_id,
-    createdAt: event.created_at,
-  }));
-}
-
 function citedEvents(db: DatabaseSync, document: Row, markdown: string, requireSameEntity: boolean) {
-  const ids = [...new Set([...markdown.matchAll(/^\[\^[^\]]+\]:\s*event:([0-9a-f-]{36})\s*$/gim)].map((match) => match[1]))].sort();
+  const ids = citedWikiDocumentEventIds(markdown);
   if (!ids.length) return null;
-  const evidence = [];
   let crossEntityCount = 0;
   for (const id of ids) {
     const event = one(db, 'SELECT * FROM event WHERE id=?', id);
-    if (!event) return null;
+    if (!event) return { ids, hash: null, crossEntityCount };
     if (event.entity_type !== document.entity_type || event.entity_id !== document.entity_id) crossEntityCount++;
-    if (requireSameEntity && crossEntityCount) return null;
-    evidence.push({ eventId: id, eventHash: eventHash(event) });
   }
-  return { ids, hash: sha256(canonical(evidence)), crossEntityCount };
+  if (requireSameEntity && crossEntityCount) return { ids, hash: null, crossEntityCount };
+  try {
+    const snapshot = wikiDocumentEvidenceSnapshot(markdown, (id) => one(db, 'SELECT * FROM event WHERE id=?', id) as WikiDocumentEvidenceEvent | undefined);
+    return { ids: snapshot.eventIds, hash: snapshot.evidenceSnapshotHash, crossEntityCount };
+  } catch (error) {
+    if (error instanceof WikiDocumentEvidenceMissingError) return { ids, hash: null, crossEntityCount };
+    throw error;
+  }
 }
 
 function documentApproval(db: DatabaseSync, document: Row, markdown: string, expectedSourceMode: string): Approval | null {
@@ -71,7 +65,7 @@ function documentApproval(db: DatabaseSync, document: Row, markdown: string, exp
   if (approval.entity_type !== document.entity_type || approval.entity_id !== document.entity_id || approval.source_type !== 'user_input' || approval.actor !== '장진태') blockers.push('APPROVAL_IDENTITY');
   if (payload?.schema !== 'wiki-document-approval-v1' || payload.approval !== 'approve_as_is' || payload.docId !== document.doc_id || payload.byteHash !== document.byte_hash || payload.textHash !== document.text_hash || payload.revisionId !== document.current_revision_id || payload.sourceMode !== expectedSourceMode || payload.automaticApply !== false || payload.sourceCutoverPerformed !== false) blockers.push('APPROVAL_STALE');
   if (!feedback || finalValue?.docId !== document.doc_id || finalValue?.byteHash !== document.byte_hash || finalValue?.approval !== 'approve_as_is') blockers.push('APPROVAL_FEEDBACK');
-  if (!evidence || canonical(payload?.evidenceEventIds) !== canonical(evidence.ids) || payload?.evidenceSnapshotHash !== evidence.hash) blockers.push('EVIDENCE_HASH_MISMATCH');
+  if (!evidence?.hash || canonical(payload?.evidenceEventIds) !== canonical(evidence.ids) || payload?.evidenceSnapshotHash !== evidence.hash) blockers.push('EVIDENCE_HASH_MISMATCH');
   return { kind: 'document', id: approval.id, approvedEvidenceSnapshotHash: payload?.evidenceSnapshotHash ?? null, currentEvidenceSnapshotHash: evidence?.hash ?? null, crossEntityEvidenceCount: evidence?.crossEntityCount ?? 0, diagnostics, fresh: blockers.length === 0, blockers };
 }
 
@@ -138,15 +132,16 @@ export function inspectWikiBatchReadiness(input: { databasePath?: string; vaultP
   let db: DatabaseSync | undefined;
   try {
     copyFileSync(databasePath, snapshot);
-    db = new DatabaseSync(snapshot, { readOnly: true });
-    db.exec('PRAGMA query_only=ON');
+    const snapshotDb = new DatabaseSync(snapshot, { readOnly: true });
+    db = snapshotDb;
+    snapshotDb.exec('PRAGMA query_only=ON');
     const required = ['wiki_document', 'wiki_document_source_mode', 'wiki_markdown_revision', 'wiki_markdown_scan', 'wiki_markdown_scan_issue', 'wiki_proposal', 'wiki_proposal_review', 'wiki_proposal_evidence', 'wiki_entry', 'source_observation', 'entity_wiki_revision', 'wiki_draft', 'wiki_cutover_run', 'wiki_cutover_item', 'wiki_recovery_rehearsal', 'event', 'user_feedback', 'action_item', 'matter'];
-    const missing = required.filter((name) => !one(db, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", name));
+    const missing = required.filter((name) => !one(snapshotDb, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", name));
     if (missing.length) throw new Error(`필수 스키마 누락: ${missing.join(',')}`);
-    const quickCheck = one(db, 'PRAGMA quick_check');
+    const quickCheck = one(snapshotDb, 'PRAGMA quick_check');
     if (Object.values(quickCheck ?? {})[0] !== 'ok') throw new Error('DB quick_check 실패');
-    const scan = one(db, 'SELECT id,status,issue_count,started_at,completed_at FROM wiki_markdown_scan ORDER BY started_at DESC,id DESC LIMIT 1');
-    const documents = all(db, `SELECT d.*,s.source_mode,s.legacy_entity_type,s.legacy_entity_id,s.changed_by_event_id,m.our_ref,m.archived_at AS matter_archived_at
+    const scan = one(snapshotDb, 'SELECT id,status,issue_count,started_at,completed_at FROM wiki_markdown_scan ORDER BY started_at DESC,id DESC LIMIT 1');
+    const documents = all(snapshotDb, `SELECT d.*,s.source_mode,s.legacy_entity_type,s.legacy_entity_id,s.changed_by_event_id,m.our_ref,m.archived_at AS matter_archived_at
       FROM wiki_document d LEFT JOIN wiki_document_source_mode s ON s.doc_id=d.doc_id
       LEFT JOIN matter m ON d.entity_type='matter' AND m.id=d.entity_id
       ORDER BY m.our_ref,d.doc_id`);
@@ -155,20 +150,20 @@ export function inspectWikiBatchReadiness(input: { databasePath?: string; vaultP
       const file = currentFile(vaultPath, document.relative_path, document.byte_hash);
       if (document.parse_status !== 'valid') blockers.push(`PARSE_${String(document.parse_status).toUpperCase()}`);
       if (document.last_seen_scan_id !== scan?.id || scan?.status !== 'succeeded') blockers.push('SCAN_STALE');
-      if (count(db, 'SELECT COUNT(*) AS n FROM wiki_markdown_scan_issue WHERE scan_id=? AND (doc_id=? OR relative_path=?)', scan?.id, document.doc_id, document.relative_path) > 0) blockers.push('SCAN_ISSUE');
+      if (count(snapshotDb, 'SELECT COUNT(*) AS n FROM wiki_markdown_scan_issue WHERE scan_id=? AND (doc_id=? OR relative_path=?)', scan?.id, document.doc_id, document.relative_path) > 0) blockers.push('SCAN_ISSUE');
       if (file.blocker) blockers.push(file.blocker);
-      const revision = one(db, 'SELECT * FROM wiki_markdown_revision WHERE id=?', document.current_revision_id);
+      const revision = one(snapshotDb, 'SELECT * FROM wiki_markdown_revision WHERE id=?', document.current_revision_id);
       if (!revision || revision.doc_id !== document.doc_id || revision.byte_hash !== document.byte_hash) blockers.push('REVISION_STALE');
       if (!document.our_ref || document.matter_archived_at) blockers.push('MATTER_UNAVAILABLE');
-      const openActionCount = count(db, 'SELECT COUNT(*) AS n FROM action_item WHERE matter_id=? AND archived_at IS NULL AND status!=?', document.entity_id, '완료');
-      const legacyRevisionCount = count(db, 'SELECT COUNT(*) AS n FROM entity_wiki_revision WHERE entity_type=? AND entity_id=?', document.entity_type, document.entity_id);
-      const pendingDraftCount = count(db, `SELECT COUNT(*) AS n FROM wiki_draft WHERE entity_type=? AND entity_id=? AND review_status='pending'`, document.entity_type, document.entity_id);
-      const cutover = one(db, `SELECT i.id,i.expected_byte_hash,i.markdown_revision_id,i.source_change_event_id,r.id AS run_id,r.status AS run_status
+      const openActionCount = count(snapshotDb, 'SELECT COUNT(*) AS n FROM action_item WHERE matter_id=? AND archived_at IS NULL AND status!=?', document.entity_id, '완료');
+      const legacyRevisionCount = count(snapshotDb, 'SELECT COUNT(*) AS n FROM entity_wiki_revision WHERE entity_type=? AND entity_id=?', document.entity_type, document.entity_id);
+      const pendingDraftCount = count(snapshotDb, `SELECT COUNT(*) AS n FROM wiki_draft WHERE entity_type=? AND entity_id=? AND review_status='pending'`, document.entity_type, document.entity_id);
+      const cutover = one(snapshotDb, `SELECT i.id,i.expected_byte_hash,i.markdown_revision_id,i.source_change_event_id,r.id AS run_id,r.status AS run_status
         FROM wiki_cutover_item i JOIN wiki_cutover_run r ON r.id=i.cutover_run_id
         WHERE i.doc_id=? ORDER BY i.created_at DESC,i.id DESC LIMIT 1`, document.doc_id);
-      const recoveryCount = cutover ? count(db, `SELECT COUNT(*) AS n FROM wiki_recovery_rehearsal WHERE cutover_run_id=? AND status='succeeded'`, cutover.run_id) : 0;
+      const recoveryCount = cutover ? count(snapshotDb, `SELECT COUNT(*) AS n FROM wiki_recovery_rehearsal WHERE cutover_run_id=? AND status='succeeded'`, cutover.run_id) : 0;
       const sourceMode = document.source_mode ?? 'missing';
-      const approval = latestApproval(db, document, file.markdown, cutover ? 'legacy_db' : sourceMode);
+      const approval = latestApproval(snapshotDb, document, file.markdown, cutover ? 'legacy_db' : sourceMode);
       if (!approval.fresh) blockers.push(...approval.blockers);
       if (sourceMode === 'legacy_db') {
         if (cutover) blockers.push('CUTOVER_SOURCE_CONFLICT');
@@ -179,7 +174,7 @@ export function inspectWikiBatchReadiness(input: { databasePath?: string; vaultP
       } else if (sourceMode === 'markdown') {
         if (legacyRevisionCount && (!cutover || cutover.run_status !== 'succeeded' || !recoveryCount || cutover.expected_byte_hash !== document.byte_hash || cutover.markdown_revision_id !== document.current_revision_id)) blockers.push('CUTOVER_RECOVERY_MISSING');
         if (!legacyRevisionCount && cutover) blockers.push('UNEXPECTED_CUTOVER');
-        const sourceEvent = document.changed_by_event_id ? one(db, 'SELECT * FROM event WHERE id=?', document.changed_by_event_id) : null;
+        const sourceEvent = document.changed_by_event_id ? one(snapshotDb, 'SELECT * FROM event WHERE id=?', document.changed_by_event_id) : null;
         const sourcePayload = json(sourceEvent?.after_json);
         if (legacyRevisionCount) {
           if (!sourceEvent || sourceEvent.event_type !== 'wiki.source_mode_changed' || sourcePayload?.docId !== document.doc_id || sourcePayload?.sourceMode !== 'markdown' || sourcePayload?.byteHash !== document.byte_hash || cutover?.source_change_event_id !== sourceEvent.id) blockers.push('SOURCE_EVENT_INVALID');

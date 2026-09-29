@@ -14,6 +14,12 @@ import {
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { pathIsInside, resolveWikiVaultPath, runtimeProfile } from './runtime-environment';
+import {
+  canonicalWikiDocumentEvidence as canonical,
+  wikiDocumentEvidenceSnapshot,
+  WikiDocumentEvidenceMissingError,
+  type WikiDocumentEvidenceEvent,
+} from './wiki-document-evidence';
 import { readWikiMarkdownSource } from './wiki-markdown';
 import { reconcileWikiMarkdownProposal } from './wiki-proposal';
 import { databasePath, transaction, withDatabase, WorkDbError } from './work-db';
@@ -149,37 +155,6 @@ function readJson(file: string) {
   return JSON.parse(readFileSync(file, 'utf8')) as Row;
 }
 
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function citedEventIds(markdown: string) {
-  return [...markdown.matchAll(/^\[\^[^\]]+\]:\s*event:([0-9a-f-]{36})\s*$/gim)]
-    .map((match) => match[1])
-    .filter((value, index, values) => values.indexOf(value) === index)
-    .sort();
-}
-
-function eventSnapshot(event: Row) {
-  return {
-    id: event.id,
-    entityType: event.entity_type,
-    entityId: event.entity_id,
-    eventType: event.event_type,
-    beforeJson: event.before_json,
-    afterJson: event.after_json,
-    actor: event.actor,
-    sourceType: event.source_type,
-    correlationId: event.correlation_id,
-    createdAt: event.created_at,
-  };
-}
-
 function verifiedDocumentApproval(db: DatabaseSync, input: {
   approvalEventId: string;
   document: Row;
@@ -213,16 +188,26 @@ function verifiedDocumentApproval(db: DatabaseSync, input: {
   const finalValue = JSON.parse(String(feedback.final_value_json ?? 'null')) as Row | null;
   check(finalValue?.docId === input.document.doc_id && finalValue?.byteHash === input.expectedByteHash && finalValue?.approval === 'approve_as_is', '사용자 피드백이 현재 문서 승인과 일치하지 않습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
 
-  const ids = citedEventIds(input.markdown);
-  check(ids.length > 0, '승인 문서에 검증할 근거 이벤트가 없습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
-  const evidence = ids.map((id) => {
-    const event = db.prepare('SELECT * FROM event WHERE id=?').get(id) as Row | undefined;
-    check(event, `승인 문서의 근거 이벤트가 없습니다: ${id}`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
-    check(event.entity_type === input.document.entity_type && event.entity_id === input.document.entity_id, `승인 문서가 다른 엔티티의 근거를 인용합니다: ${id}`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
-    return { eventId: id, eventHash: sha256(canonical(eventSnapshot(event))) };
-  });
-  const evidenceSnapshotHash = sha256(canonical(evidence));
-  check(canonical(payload.evidenceEventIds) === canonical(ids) && payload.evidenceSnapshotHash === evidenceSnapshotHash, '승인 후 문서 근거가 변경되었습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  let snapshot: ReturnType<typeof wikiDocumentEvidenceSnapshot>;
+  try {
+    snapshot = wikiDocumentEvidenceSnapshot(input.markdown, (id) => {
+      const event = db.prepare('SELECT * FROM event WHERE id=?').get(id) as Row | undefined;
+      if (!event) return undefined;
+      check(event.entity_type === input.document.entity_type && event.entity_id === input.document.entity_id,
+        `승인 문서가 다른 엔티티의 근거를 인용합니다: ${id}`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+      return event as WikiDocumentEvidenceEvent;
+    });
+  } catch (error) {
+    if (error instanceof WikiDocumentEvidenceMissingError) {
+      throw new WorkDbError(`승인 문서의 근거 이벤트가 없습니다: ${error.eventId}`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+    }
+    throw error;
+  }
+  check(snapshot.eventIds.length > 0, '승인 문서에 검증할 근거 이벤트가 없습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  check(canonical(payload.evidenceEventIds) === canonical(snapshot.eventIds)
+    && payload.evidenceSnapshotHash === snapshot.evidenceSnapshotHash,
+  '승인 후 문서 근거가 변경되었습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  const evidenceSnapshotHash = snapshot.evidenceSnapshotHash;
   return { approval, feedback, payload, evidenceSnapshotHash };
 }
 
