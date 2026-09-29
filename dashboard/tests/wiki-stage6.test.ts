@@ -159,6 +159,34 @@ async function main() {
       db.prepare('UPDATE event SET after_json=? WHERE id=?').run('{"fact":"합성 근거"}', eventId);
     });
 
+    const reviewAudit: any = withDatabase((db) => db.prepare(`
+      SELECT e.id,e.source_type,e.correlation_id,e.after_json
+      FROM wiki_proposal_review r JOIN event e ON e.id=r.review_event_id
+      WHERE r.proposal_id=? AND r.action='accept_for_manual_apply'
+      ORDER BY r.created_at DESC,r.id DESC LIMIT 1
+    `).get(ingested.proposal.id));
+    const canonicalReviewPayload = JSON.parse(reviewAudit.after_json);
+    const expectAuditBlock = async (authorizationId: string) => assert.rejects(
+      () => executeWikiCutover({
+        authorizationId,
+        reviewer: '장진태',
+        confirmation: 'CUTOVER',
+        bundleRoot,
+        targets: [{ docId, expectedByteHash: approvedHash, proposalId: ingested.proposal.id }],
+      }),
+      (error: any) => error?.code === 'WIKI_CUTOVER_REVIEW_STALE',
+    );
+    withDatabase((db) => db.prepare('UPDATE event SET source_type=? WHERE id=?').run('synthetic_untrusted', reviewAudit.id));
+    await expectAuditBlock('stage6-review-source-type-tamper');
+    withDatabase((db) => db.prepare('UPDATE event SET source_type=?,correlation_id=? WHERE id=?')
+      .run(reviewAudit.source_type, 'wrong-proposal', reviewAudit.id));
+    await expectAuditBlock('stage6-review-correlation-tamper');
+    withDatabase((db) => db.prepare('UPDATE event SET correlation_id=?,after_json=? WHERE id=?')
+      .run(reviewAudit.correlation_id, JSON.stringify({ ...canonicalReviewPayload, proposalId: 'wrong-proposal', automaticApply: true }), reviewAudit.id));
+    await expectAuditBlock('stage6-review-payload-tamper');
+    withDatabase((db) => db.prepare('UPDATE event SET source_type=?,correlation_id=?,after_json=? WHERE id=?')
+      .run(reviewAudit.source_type, reviewAudit.correlation_id, reviewAudit.after_json, reviewAudit.id));
+
     const cutover: any = await executeWikiCutover({
       authorizationId: 'stage6-synthetic-authorization-001',
       reviewer: '장진태',

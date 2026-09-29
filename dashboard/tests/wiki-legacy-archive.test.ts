@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { wikiDocumentEvidenceSnapshot, type WikiDocumentEvidenceEvent } from '../lib/wiki-document-evidence';
 import { deleteWikiLegacyBodies, runWikiLegacyArchiveDryRun, verifyWikiLegacyArchive } from '../lib/wiki-legacy-archive';
 import { withDatabase } from '../lib/work-db';
 
@@ -14,6 +15,7 @@ const bundle = path.join(root, 'cutover-bundle');
 const restore = path.join(root, 'restore');
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const at = '2026-09-29T00:00:00.000Z';
+const documentEvidenceEventId = '11111111-1111-4111-8111-111111111111';
 
 function configureEnvironment(isolatedRoot: string, databaseFile: string, vaultRoot: string) {
   process.env.SSPAT_RUNTIME_PROFILE = 'test';
@@ -31,7 +33,7 @@ function seed() {
   mkdirSync(path.dirname(file), { recursive: true });
   mkdirSync(bundle);
   mkdirSync(restore);
-  const bytes = '# Synthetic Wiki\n';
+  const bytes = `# Synthetic Wiki\n\n[^evidence]: event:${documentEvidenceEventId}\n`;
   writeFileSync(file, bytes);
   const byteHash = hash(bytes);
   withDatabase((db) => {
@@ -40,6 +42,9 @@ function seed() {
     db.prepare(`INSERT INTO decision_run(id,operation,status,started_at) VALUES ('r1','wiki_revision','succeeded',?)`).run(at);
     db.prepare(`INSERT INTO event(id,entity_type,entity_id,event_type,after_json,actor,source_type,created_at)
       VALUES ('published','matter','m1','wiki.publish','{}','장진태','user_input',?)`).run(at);
+    db.prepare(`INSERT INTO event(id,entity_type,entity_id,event_type,after_json,actor,source_type,correlation_id,created_at)
+      VALUES (?,'matter','m1','wiki.synthetic_fact','{"fact":"archive evidence"}','장진태','user_input','doc1',?)`)
+      .run(documentEvidenceEventId, at);
     db.prepare(`INSERT INTO entity_wiki_revision(id,entity_type,entity_id,version,run_id,sections_json,change_summary,input_hash,publication_event_id,created_at)
       VALUES ('rev1','matter','m1',1,'r1','[{"key":"overview","sentences":[]}]','legacy','input','published',?)`).run(at);
     db.prepare(`INSERT INTO wiki_markdown_scan(id,profile,vault_fingerprint,status,processing_mode,discovered_count,indexed_count,issue_count,changed_count,unchanged_count,elapsed_ms,snapshot_hash,started_at,completed_at)
@@ -49,9 +54,11 @@ function seed() {
     db.prepare(`INSERT INTO wiki_markdown_revision(id,doc_id,revision_number,scan_id,relative_path,byte_hash,text_hash,file_size,history_object_path,git_status,origin,observed_at)
       VALUES ('mdrev1','doc1',1,'scan','10_Matters/one.md',?,?,?,'.sspat-history/one','unavailable','migration',?)`).run(byteHash, byteHash, Buffer.byteLength(bytes), at);
     db.prepare(`UPDATE wiki_document SET current_revision_id='mdrev1' WHERE doc_id='doc1'`).run();
+    const evidence = wikiDocumentEvidenceSnapshot(bytes, (id) => db.prepare('SELECT * FROM event WHERE id=?').get(id) as WikiDocumentEvidenceEvent | undefined);
     const approval = { schema: 'wiki-document-approval-v1', approval: 'approve_as_is', docId: 'doc1', byteHash,
       textHash: byteHash,
-      revisionId: 'mdrev1', sourceMode: 'legacy_db', automaticApply: false, sourceCutoverPerformed: false };
+      revisionId: 'mdrev1', evidenceEventIds: evidence.eventIds, evidenceSnapshotHash: evidence.evidenceSnapshotHash,
+      sourceMode: 'legacy_db', automaticApply: false, sourceCutoverPerformed: false };
     db.prepare(`INSERT INTO event(id,entity_type,entity_id,event_type,after_json,actor,source_type,correlation_id,created_at)
       VALUES ('approved','matter','m1','wiki.document_approved',?,'장진태','user_input','doc1',?)`).run(JSON.stringify(approval), at);
     db.prepare(`INSERT INTO user_feedback(id,event_id,actor_id,feedback_action,final_value_json,reason_code,created_at)
@@ -185,7 +192,12 @@ function proposalApprovalBindingTests() {
     withDatabase((db) => db.prepare(`UPDATE event SET after_json=?,correlation_id='proposal' WHERE id='proposal-review-event'`)
       .run(JSON.stringify({ ...canonicalReview, automaticApply: true })));
     assertApprovalBlocked('archive-auto-apply-tampered');
-    withDatabase((db) => db.prepare(`UPDATE event SET after_json=? WHERE id='proposal-review-event'`).run(JSON.stringify(canonicalReview)));
+    withDatabase((db) => db.prepare(`UPDATE event SET after_json=?,source_type='synthetic_untrusted' WHERE id='proposal-review-event'`).run(JSON.stringify(canonicalReview)));
+    assertApprovalBlocked('archive-review-source-type-tampered');
+    withDatabase((db) => db.prepare(`UPDATE event SET source_type='user_input' WHERE id='proposal-review-event'`).run());
+    withDatabase((db) => db.prepare(`UPDATE wiki_file_operation SET relative_path='80_Proposals/unrelated.md' WHERE id='proposal-operation'`).run());
+    assertApprovalBlocked('archive-operation-path-tampered');
+    withDatabase((db) => db.prepare(`UPDATE wiki_file_operation SET relative_path='80_Proposals/proposal.md' WHERE id='proposal-operation'`).run());
     assert.equal(verifyWikiLegacyArchive(path.join(proposalRoot, 'archive-valid')).duplicate, true);
   } finally {
     configureEnvironment(root, database, vault);
@@ -293,6 +305,19 @@ function run() {
     const rows = withDatabase((db) => db.prepare('SELECT * FROM wiki_legacy_archive_run').all());
     assert.equal(rows.length, 5);
     assert.throws(() => withDatabase((db) => db.prepare('DELETE FROM wiki_legacy_archive_run').run()), /sealed wiki archive run cannot be deleted/);
+    withDatabase((db) => db.prepare(`UPDATE event SET source_type='synthetic_untrusted' WHERE id='changed'`).run());
+    const sourceTypeTampered = runWikiLegacyArchiveDryRun(path.join(root, 'archive-source-type-tampered'));
+    assert.ok(sourceTypeTampered.manifest.items[0].blockers.includes('source_change_event_invalid'));
+    withDatabase((db) => db.prepare(`UPDATE event SET source_type='user_input' WHERE id='changed'`).run());
+    const canonicalApproval = withDatabase((db) => JSON.parse(String((db.prepare(`SELECT after_json FROM event WHERE id='approved'`).get() as any).after_json)));
+    withDatabase((db) => db.prepare(`UPDATE event SET after_json=? WHERE id='approved'`).run(JSON.stringify({
+      ...canonicalApproval,
+      evidenceEventIds: ['22222222-2222-4222-8222-222222222222'],
+      evidenceSnapshotHash: '0'.repeat(64),
+    })));
+    const approvalTampered = runWikiLegacyArchiveDryRun(path.join(root, 'archive-approval-evidence-tampered'));
+    assert.ok(approvalTampered.manifest.items[0].blockers.includes('approval_audit_invalid'));
+    withDatabase((db) => db.prepare(`UPDATE event SET after_json=? WHERE id='approved'`).run(JSON.stringify(canonicalApproval)));
     proposalApprovalBindingTests();
     console.log('BUILD-F sealed archive, audit binding, tamper, stale, partial, path and no-delete tests passed.');
   } finally { rmSync(root, { recursive: true, force: true }); }

@@ -19,8 +19,39 @@ export type WikiOperationView = {
 
 type Row = Record<string, any>;
 
-export function wikiOperationView(proposal: Row | null | undefined, currentByteHash?: string | null): WikiOperationView | null {
-  if (!proposal) return null;
+export type WikiOperationContext = {
+  runtimeProfile?: string | null;
+  batchReadiness?: {
+    status?: string | null;
+    readyForPilot?: boolean | null;
+    blockers?: unknown[] | null;
+  } | null;
+};
+
+export function wikiBatchOperationView(context: WikiOperationContext = {}): WikiOperationView | null {
+  const readiness = context.batchReadiness;
+  if (!readiness) return null;
+  const ready = readiness.status === 'passed' || readiness.readyForPilot === true;
+  const blocked = readiness.status === 'failed' || readiness.readyForPilot === false;
+  if (!ready && !blocked) return null;
+  const blockerCount = Array.isArray(readiness.blockers) ? readiness.blockers.length : 0;
+  return ready ? {
+    state: 'BatchReady', label: '배치 준비 완료', tone: 'success',
+    reason: '읽기 전용 준비도 검사가 통과했습니다. 이 상태만으로 운영 실행이 승인되지는 않습니다.',
+    nextAction: '평가 수치·임계값·run을 확인한 뒤 별도 운영 승인을 받으세요.',
+  } : {
+    state: 'BatchBlocked', label: '배치 확대 차단', tone: 'warning',
+    reason: blockerCount ? `준비도 검사에서 ${blockerCount}개 차단 사유가 확인됐습니다.` : '준비도 검사가 통과되지 않았습니다.',
+    nextAction: '차단 사유를 해소하고 새 읽기 전용 준비도 검사를 실행하세요.',
+  };
+}
+
+export function wikiOperationView(
+  proposal: Row | null | undefined,
+  currentByteHash?: string | null,
+  context: WikiOperationContext = {},
+): WikiOperationView | null {
+  if (!proposal) return wikiBatchOperationView(context);
   const operation = proposal.applyOperation as Row | null | undefined;
   const approval = proposal.autoApproval as Row | null | undefined;
   if (operation && ['conflict', 'failed'].includes(String(operation.status))) return {
@@ -68,9 +99,10 @@ export function wikiOperationView(proposal: Row | null | undefined, currentByteH
     reason: 'AI 제안의 수동 반영 검토 이력은 있으나 운영 자동반영 조건은 아직 충족되지 않았습니다.',
     nextAction: '현재 base·target·근거 hash를 다시 대조하세요.',
   };
-  return {
+  if (context.runtimeProfile === 'operational') return {
     state: 'OperationalBlocked', label: '자동 반영 차단', tone: 'warning',
-    reason: '이 제안은 수동 검토 완료 상태가 아닙니다.',
+    reason: '운영 프로필이며 이 제안은 수동 검토 완료 상태가 아닙니다.',
     nextAction: '문서와 근거를 검토하고 제안 상태를 확정하세요.',
   };
+  return null;
 }

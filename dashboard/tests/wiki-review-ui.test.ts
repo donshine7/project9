@@ -72,6 +72,12 @@ assert.equal(wikiOperationView({ ...reviewedProposal, applyOperation: {
   id: 'operation-2', status: 'conflict', errorCode: 'WIKI_AUTO_APPLY_BASE_CONFLICT',
 } }, hash)?.state, 'Conflict');
 assert.equal(wikiOperationView({ ...reviewedProposal, status: 'stale_evidence' }, hash)?.state, 'Stale');
+assert.equal(wikiOperationView({ ...reviewedProposal, status: 'prepared' }, hash, { runtimeProfile: 'operational' })?.state, 'OperationalBlocked');
+assert.equal(wikiOperationView({ ...reviewedProposal, status: 'prepared' }, hash, { runtimeProfile: 'test' }), null);
+assert.equal(wikiOperationView(null, null, { batchReadiness: { status: 'passed', blockers: [] } })?.state, 'BatchReady');
+assert.equal(wikiOperationView(null, null, { batchReadiness: { status: 'failed', blockers: ['synthetic'] } })?.state, 'BatchBlocked');
+assert.equal(wikiOperationView(null, null, { batchReadiness: { readyForPilot: true, blockers: [] } })?.state, 'BatchReady');
+assert.equal(wikiOperationView(null, null, { batchReadiness: { readyForPilot: false, blockers: ['synthetic'] } })?.state, 'BatchBlocked');
 
 function response(status: number, payload: unknown) {
   return { status, ok: status >= 200 && status < 300, json: async () => payload };

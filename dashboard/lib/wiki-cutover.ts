@@ -209,10 +209,69 @@ function verifiedDocumentApproval(db: DatabaseSync, input: {
   }
   check(snapshot.eventIds.length > 0, '승인 문서에 검증할 근거 이벤트가 없습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
   check(canonical(payload.evidenceEventIds) === canonical(snapshot.eventIds)
-    && payload.evidenceSnapshotHash === snapshot.evidenceSnapshotHash,
+    && payload.evidenceSnapshotHash === snapshot.evidenceSnapshotHash
+    && canonical(finalValue?.evidenceEventIds) === canonical(snapshot.eventIds)
+    && finalValue?.evidenceSnapshotHash === snapshot.evidenceSnapshotHash,
   '승인 후 문서 근거가 변경되었습니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
   const evidenceSnapshotHash = snapshot.evidenceSnapshotHash;
   return { approval, feedback, payload, evidenceSnapshotHash };
+}
+
+function verifiedProposalApproval(db: DatabaseSync, input: {
+  proposalId: string;
+  proposalReviewId?: string | null;
+  document: Row;
+  expectedByteHash: string;
+  reviewer: string;
+}) {
+  const proposal = db.prepare('SELECT * FROM wiki_proposal WHERE id=? AND doc_id=?')
+    .get(input.proposalId, input.document.doc_id) as Row | undefined;
+  const review = input.proposalReviewId
+    ? db.prepare(`SELECT * FROM wiki_proposal_review WHERE id=? AND proposal_id=? AND action='accept_for_manual_apply'`)
+      .get(input.proposalReviewId, input.proposalId) as Row | undefined
+    : db.prepare(`SELECT * FROM wiki_proposal_review WHERE proposal_id=? AND action='accept_for_manual_apply' ORDER BY created_at DESC,id DESC LIMIT 1`)
+      .get(input.proposalId) as Row | undefined;
+  check(proposal?.status === 'applied_observed'
+    && proposal.target_byte_hash === input.expectedByteHash
+    && proposal.proposal_byte_hash === proposal.target_byte_hash
+    && proposal.reviewer === input.reviewer
+    && review?.reviewer === input.reviewer
+    && review.reviewed_base_byte_hash === proposal.base_byte_hash
+    && review.reviewed_evidence_snapshot_hash === proposal.evidence_snapshot_hash,
+  `${input.document.doc_id}의 제안 검토가 현재 target과 일치하지 않습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+
+  const reviewEvent = db.prepare('SELECT * FROM event WHERE id=?').get(review.review_event_id) as Row | undefined;
+  let payload: Row | null = null;
+  try { payload = JSON.parse(String(reviewEvent?.after_json ?? 'null')) as Row | null; } catch { payload = null; }
+  check(reviewEvent?.event_type === 'wiki.proposal_reviewed'
+    && reviewEvent.entity_type === input.document.entity_type
+    && reviewEvent.entity_id === input.document.entity_id
+    && reviewEvent.actor === input.reviewer
+    && reviewEvent.source_type === 'user_input'
+    && reviewEvent.correlation_id === proposal.id
+    && payload?.proposalId === proposal.id
+    && payload?.baseByteHash === proposal.base_byte_hash
+    && payload?.targetByteHash === proposal.target_byte_hash
+    && payload?.evidenceSnapshotHash === proposal.evidence_snapshot_hash
+    && payload?.automaticApply === false,
+  `${input.document.doc_id}의 제안 검토 감사 이벤트가 유효하지 않습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+
+  const fileOperation = db.prepare('SELECT * FROM wiki_file_operation WHERE id=?').get(proposal.operation_id) as Row | undefined;
+  check(fileOperation?.operation_type === 'proposal_write'
+    && fileOperation.subject_id === proposal.id
+    && fileOperation.status === 'succeeded'
+    && fileOperation.base_byte_hash === proposal.base_byte_hash
+    && fileOperation.target_byte_hash === proposal.target_byte_hash
+    && fileOperation.relative_path === proposal.proposal_relative_path,
+  `${input.document.doc_id}의 제안 파일 작업 연결이 유효하지 않습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+
+  const evidence = wikiProposalEvidenceSnapshot(db, input.document.entity_type, input.document.entity_id);
+  check(evidence.records.length > 0 && evidence.snapshotHash === proposal.evidence_snapshot_hash,
+    `${input.document.doc_id}의 제안 근거가 변경되었습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  const invalidEvidence = db.prepare(`SELECT COUNT(*) AS count FROM wiki_proposal_evidence WHERE proposal_id=? AND validation_status!='valid'`)
+    .get(proposal.id) as Row;
+  check(Number(invalidEvidence.count) === 0, `${input.document.doc_id}의 제안 근거 검증 상태가 변경되었습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  return { proposal, review, reviewEvent, payload, fileOperation };
 }
 
 function currentTargetMarkdown(vaultRoot: string, target: Row) {
@@ -266,19 +325,13 @@ function revalidateTargetBeforeCommit(db: DatabaseSync, vaultRoot: string, targe
     });
     return;
   }
-  const proposal = db.prepare('SELECT * FROM wiki_proposal WHERE id=? AND doc_id=?').get(target.proposalId, target.docId) as Row | undefined;
-  const review = db.prepare(`SELECT * FROM wiki_proposal_review WHERE id=? AND proposal_id=? AND action='accept_for_manual_apply'`).get(target.proposalReviewId, target.proposalId) as Row | undefined;
-  check(proposal?.status === 'applied_observed'
-    && proposal.target_byte_hash === target.expectedByteHash
-    && review?.reviewer === reviewer
-    && review.reviewed_base_byte_hash === proposal.base_byte_hash
-    && review.reviewed_evidence_snapshot_hash === proposal.evidence_snapshot_hash,
-  `${target.docId}의 제안 검토가 preflight 이후 변경되었습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
-  const evidence = wikiProposalEvidenceSnapshot(db, target.entityType, target.entityId);
-  check(evidence.records.length > 0 && evidence.snapshotHash === proposal.evidence_snapshot_hash,
-    `${target.docId}의 제안 근거가 preflight 이후 변경되었습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
-  const invalidEvidence = db.prepare(`SELECT COUNT(*) AS count FROM wiki_proposal_evidence WHERE proposal_id=? AND validation_status!='valid'`).get(target.proposalId) as Row;
-  check(Number(invalidEvidence.count) === 0, `${target.docId}의 제안 근거 검증 상태가 변경되었습니다.`, 409, 'WIKI_CUTOVER_REVIEW_STALE');
+  verifiedProposalApproval(db, {
+    proposalId: target.proposalId,
+    proposalReviewId: target.proposalReviewId,
+    document: currentDocument,
+    expectedByteHash: target.expectedByteHash,
+    reviewer,
+  });
 }
 
 function writeExclusiveJson(file: string, value: unknown) {
@@ -333,11 +386,14 @@ async function preflightTargets(targets: WikiCutoverTarget[], reviewer: string) 
       let review: Row | null = null;
       let documentApproval: ReturnType<typeof verifiedDocumentApproval> | null = null;
       if (proposalId) {
-        proposal = (db.prepare('SELECT * FROM wiki_proposal WHERE id=? AND doc_id=?').get(proposalId, target.docId) as Row | undefined) ?? null;
-        check(proposal?.status === 'applied_observed' && proposal.target_byte_hash === target.expectedByteHash, '현재 파일로 수동 반영이 관측된 제안이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
-        review = (db.prepare(`SELECT * FROM wiki_proposal_review WHERE proposal_id=? AND action='accept_for_manual_apply' ORDER BY created_at DESC,id DESC LIMIT 1`).get(proposalId) as Row | undefined) ?? null;
-        check(review, '사람의 수동 반영 승인 기록이 필요합니다.', 409, 'WIKI_CUTOVER_REVIEW_REQUIRED');
-        check(review.reviewed_evidence_snapshot_hash === proposal.evidence_snapshot_hash, '사람이 검토한 근거 snapshot과 제안 근거가 다릅니다.', 409, 'WIKI_CUTOVER_REVIEW_STALE');
+        const verified = verifiedProposalApproval(db, {
+          proposalId,
+          document,
+          expectedByteHash: target.expectedByteHash,
+          reviewer,
+        });
+        proposal = verified.proposal;
+        review = verified.review;
       } else {
         documentApproval = verifiedDocumentApproval(db, {
           approvalEventId: documentApprovalEventId!,
@@ -580,6 +636,11 @@ export function rehearseWikiRecovery(cutoverRunId: string, restoreRootInput: str
         && document?.current_revision_id === target.markdownRevisionId
         && revision?.byte_hash === target.byteHash
         && event?.event_type === 'wiki.source_mode_changed'
+        && event.entity_type === document.entity_type
+        && event.entity_id === document.entity_id
+        && event.actor === manifest.reviewer
+        && event.source_type === 'user_input'
+        && event.correlation_id === manifest.authorizationId
         && eventAfter?.sourceMode === 'markdown'
         && eventAfter?.byteHash === target.byteHash
         && eventAfter?.approvalKind === target.approvalKind
@@ -589,13 +650,16 @@ export function rehearseWikiRecovery(cutoverRunId: string, restoreRootInput: str
 
       let approvalVerification: Row;
       if (target.approvalKind === 'proposal') {
-        const proposal = restoredDb.prepare('SELECT * FROM wiki_proposal WHERE id=?').get(target.proposalId) as Row | undefined;
-        const review = restoredDb.prepare('SELECT * FROM wiki_proposal_review WHERE id=?').get(target.proposalReviewId) as Row | undefined;
+        const verified = verifiedProposalApproval(restoredDb, {
+          proposalId: target.proposalId,
+          proposalReviewId: target.proposalReviewId,
+          document,
+          expectedByteHash: target.byteHash,
+          reviewer: manifest.reviewer,
+        });
+        const { proposal, review } = verified;
         check(
-          proposal?.status === 'applied_observed'
-            && proposal.target_byte_hash === target.byteHash
-            && review?.action === 'accept_for_manual_apply'
-            && item.proposal_id === proposal.id
+          item.proposal_id === proposal.id
             && item.proposal_review_id === review.id
             && item.document_approval_event_id === null,
           `복원 문서의 제안 승인 연결이 다릅니다: ${target.docId}`,

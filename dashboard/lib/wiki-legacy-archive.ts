@@ -4,6 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { pathIsInside, resolveDatabasePath, resolveWikiVaultPath, runtimeProfile } from './runtime-environment';
+import {
+  canonicalWikiDocumentEvidence as canonicalEvidence,
+  wikiDocumentEvidenceSnapshot,
+  type WikiDocumentEvidenceEvent,
+} from './wiki-document-evidence';
 import { withDatabase, WorkDbError } from './work-db';
 
 type Row = Record<string, any>;
@@ -134,13 +139,26 @@ function revisionEvidence(source: Record<string, Row[]>, revision: Row, vault: s
   const markdownRevision = document ? rowBy(source.wiki_markdown_revision, 'id', document.current_revision_id) : null;
   add('markdown_revision_invalid', markdownRevision?.doc_id === document?.doc_id && markdownRevision?.byte_hash === document?.byte_hash && markdownRevision?.relative_path === document?.relative_path);
   let markdownHash: string | null = null;
+  let markdownTextHash: string | null = null;
+  let markdownEvidence: ReturnType<typeof wikiDocumentEvidenceSnapshot> | null = null;
   if (document) {
     try {
       const file = physicalFile(vault, document.relative_path);
-      if (file) markdownHash = sha256(readFileSync(file));
+      if (file) {
+        const bytes = readFileSync(file);
+        const normalized = bytes.toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+        markdownHash = sha256(bytes);
+        markdownTextHash = sha256(normalized);
+        markdownEvidence = wikiDocumentEvidenceSnapshot(normalized, (id) => {
+          const event = rowBy(source.event, 'id', id);
+          if (!event || event.entity_type !== revision.entity_type || event.entity_id !== revision.entity_id) return undefined;
+          return event as WikiDocumentEvidenceEvent;
+        });
+      }
     } catch { /* recorded as blocker */ }
   }
-  add('markdown_file_missing_or_changed', markdownHash && markdownHash === document?.byte_hash);
+  add('markdown_file_missing_or_changed', markdownHash && markdownHash === document?.byte_hash
+    && markdownTextHash === document?.text_hash);
   const cutovers = rowsBy(source.wiki_cutover_item, 'legacy_revision_id', revision.id);
   add('exact_legacy_cutover_missing_or_duplicate', cutovers.length === 1);
   const item = cutovers.length === 1 ? cutovers[0] : null;
@@ -154,7 +172,8 @@ function revisionEvidence(source: Record<string, Row[]>, revision: Row, vault: s
   const after = json(sourceEvent?.after_json);
   add('source_change_event_invalid', sourceEvent?.event_type === 'wiki.source_mode_changed'
     && sourceEvent?.entity_type === revision.entity_type && sourceEvent?.entity_id === revision.entity_id
-    && sourceEvent?.actor === cutover?.reviewer && sourceEvent?.correlation_id === cutover?.authorization_id
+    && sourceEvent?.actor === cutover?.reviewer && sourceEvent?.source_type === 'user_input'
+    && sourceEvent?.correlation_id === cutover?.authorization_id
     && mode?.changed_by_event_id === sourceEvent?.id && before?.docId === document?.doc_id
     && before?.legacyRevisionId === revision.id
     && before?.sourceMode === 'legacy_db' && after?.docId === document?.doc_id
@@ -187,7 +206,9 @@ function revisionEvidence(source: Record<string, Row[]>, revision: Row, vault: s
     && proposal?.proposal_byte_hash === proposal?.target_byte_hash
     && fileOperation?.operation_type === 'proposal_write'
     && fileOperation?.subject_id === proposal?.id
+    && fileOperation?.base_byte_hash === proposal?.base_byte_hash
     && fileOperation?.target_byte_hash === proposal?.target_byte_hash
+    && fileOperation?.relative_path === proposal?.proposal_relative_path
     && fileOperation?.status === 'succeeded';
   const documentValid = approval?.event_type === 'wiki.document_approved' && approval?.source_type === 'user_input'
     && approval?.entity_type === revision.entity_type && approval?.entity_id === revision.entity_id
@@ -197,8 +218,13 @@ function revisionEvidence(source: Record<string, Row[]>, revision: Row, vault: s
     && approvalPayload?.textHash === document?.text_hash
     && approvalPayload?.revisionId === markdownRevision?.id && approvalPayload?.sourceMode === 'legacy_db'
     && approvalPayload?.automaticApply === false && approvalPayload?.sourceCutoverPerformed === false
+    && Array.isArray(approvalPayload?.evidenceEventIds) && markdownEvidence && markdownEvidence.eventIds.length > 0
+    && canonicalEvidence(approvalPayload.evidenceEventIds) === canonicalEvidence(markdownEvidence.eventIds)
+    && approvalPayload?.evidenceSnapshotHash === markdownEvidence.evidenceSnapshotHash
     && feedbackPayload?.docId === document?.doc_id && feedbackPayload?.byteHash === document?.byte_hash
-    && feedbackPayload?.approval === 'approve_as_is';
+    && feedbackPayload?.approval === 'approve_as_is'
+    && canonicalEvidence(feedbackPayload?.evidenceEventIds) === canonicalEvidence(markdownEvidence?.eventIds)
+    && feedbackPayload?.evidenceSnapshotHash === markdownEvidence?.evidenceSnapshotHash;
   const acceptedProposal = Boolean(proposal && review && !approval && proposalValid);
   const acceptedDocument = Boolean(approval && !proposal && !review && documentValid);
   add('approval_audit_invalid', acceptedProposal !== acceptedDocument);
@@ -238,7 +264,7 @@ function revisionEvidence(source: Record<string, Row[]>, revision: Row, vault: s
   }
   add('recovery_rehearsal_missing_or_invalid', report);
   return { blockers: [...new Set(blockers)].sort(), evidence: {
-    publication, decisionRun, document, mode, markdownRevision, markdownHash,
+    publication, decisionRun, document, mode, markdownRevision, markdownHash, markdownTextHash, markdownEvidence,
     cutoverItem: item, cutoverRun: cutover, sourceEvent, proposal, review, reviewEvent,
     fileOperation, approval, feedback, recovery, bundleManifestHash: bundle?.sha256 ?? null,
     recoveryReportHash: report?.sha256 ?? null,

@@ -157,6 +157,24 @@ tags: [test, approval]
     );
     withDatabase((db) => db.prepare('UPDATE event SET after_json=? WHERE id=?').run('{"fact":"원문 승인 근거"}', evidenceEventId));
 
+    const feedbackPayload = withDatabase((db) => JSON.parse(String((db.prepare(`SELECT final_value_json FROM user_feedback WHERE id='document-approval-feedback'`).get() as Row).final_value_json)));
+    const feedbackStaleAuthorizationId = 'operational-document-feedback-stale';
+    process.env.SSPAT_OPERATIONAL_WIKI_CUTOVER_AUTHORIZATION = `CUTOVER:${feedbackStaleAuthorizationId}`;
+    withDatabase((db) => db.prepare(`UPDATE user_feedback SET final_value_json=? WHERE id='document-approval-feedback'`)
+      .run(JSON.stringify({ ...feedbackPayload, evidenceSnapshotHash: '0'.repeat(64) })));
+    await assert.rejects(
+      () => executeWikiCutover({
+        authorizationId: feedbackStaleAuthorizationId,
+        reviewer: '장진태',
+        confirmation: 'CUTOVER',
+        bundleRoot,
+        targets: [{ docId, expectedByteHash: approved.byteHash, documentApprovalEventId: approvalEventId }],
+      }),
+      (error: any) => error?.code === 'WIKI_CUTOVER_REVIEW_STALE',
+    );
+    withDatabase((db) => db.prepare(`UPDATE user_feedback SET final_value_json=? WHERE id='document-approval-feedback'`)
+      .run(JSON.stringify(feedbackPayload)));
+
     process.env.SSPAT_OPERATIONAL_WIKI_CUTOVER_AUTHORIZATION = `CUTOVER:${authorizationId}`;
     const beforeBytes = readFileSync(matterFile);
     const cutover: any = await executeWikiCutover({
