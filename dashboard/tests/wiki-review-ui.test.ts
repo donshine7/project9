@@ -8,7 +8,7 @@ import {
   type ApprovalAction,
   type ReviewStateInput,
 } from '../app/wiki/review-model';
-import { wikiOperationView } from '../app/wiki/operation-model';
+import { wikiBatchOperationView, wikiOperationView } from '../app/wiki/operation-model';
 
 const hash = 'a'.repeat(64);
 const otherHash = 'b'.repeat(64);
@@ -77,10 +77,11 @@ assert.equal(wikiOperationView({ ...reviewedProposal, applyOperation: {
   id: 'operation-3', status: 'file_applied', attemptCount: 1,
 } }, hash, { runtimeProfile: 'operational' })?.state, 'OperationalBlocked');
 assert.equal(wikiOperationView({ ...reviewedProposal, status: 'prepared' }, hash, { runtimeProfile: 'test' }), null);
-assert.equal(wikiOperationView(null, null, { batchReadiness: { status: 'passed', blockers: [] } })?.state, 'BatchReady');
-assert.equal(wikiOperationView(null, null, { batchReadiness: { status: 'failed', blockers: ['synthetic'] } })?.state, 'BatchBlocked');
-assert.equal(wikiOperationView(null, null, { batchReadiness: { readyForPilot: true, blockers: [] } })?.state, 'BatchReady');
-assert.equal(wikiOperationView(null, null, { batchReadiness: { readyForPilot: false, blockers: ['synthetic'] } })?.state, 'BatchBlocked');
+assert.equal(wikiOperationView(null, null, { batchReadiness: { status: 'passed', blockers: [] } }), null);
+assert.equal(wikiBatchOperationView({ batchReadiness: { status: 'passed', blockers: [] } })?.state, 'BatchReady');
+assert.equal(wikiBatchOperationView({ batchReadiness: { status: 'failed', blockers: ['synthetic'] } })?.state, 'BatchBlocked');
+assert.equal(wikiBatchOperationView({ batchReadiness: { readyForPilot: true, blockers: [] } })?.state, 'BatchReady');
+assert.equal(wikiBatchOperationView({ batchReadiness: { readyForPilot: false, blockers: ['synthetic'] } })?.state, 'BatchBlocked');
 
 function response(status: number, payload: unknown) {
   return { status, ok: status >= 200 && status < 300, json: async () => payload };

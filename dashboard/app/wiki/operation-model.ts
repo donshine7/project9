@@ -51,7 +51,7 @@ export function wikiOperationView(
   currentByteHash?: string | null,
   context: WikiOperationContext = {},
 ): WikiOperationView | null {
-  if (!proposal) return wikiBatchOperationView(context);
+  if (!proposal) return null;
   const operation = proposal.applyOperation as Row | null | undefined;
   const approval = proposal.autoApproval as Row | null | undefined;
   if (operation && ['conflict', 'failed'].includes(String(operation.status))) return {
