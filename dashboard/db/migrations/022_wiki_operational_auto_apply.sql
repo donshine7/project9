@@ -1,0 +1,12 @@
+ALTER TABLE wiki_apply_operation ADD COLUMN authorization_id TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN checkpoint_manifest_sha256 TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN restore_report_sha256 TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN reviewer_context_json TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN idempotency_key TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN approved_row_version INTEGER;
+ALTER TABLE wiki_apply_operation ADD COLUMN approved_evidence_snapshot_hash TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN approved_source_mode TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN approved_revision_id TEXT;
+ALTER TABLE wiki_apply_operation ADD COLUMN approved_proposal_relative_path TEXT;
+CREATE UNIQUE INDEX idx_wiki_apply_operation_authorization ON wiki_apply_operation(authorization_id) WHERE authorization_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_wiki_apply_operation_idempotency ON wiki_apply_operation(idempotency_key) WHERE idempotency_key IS NOT NULL;
